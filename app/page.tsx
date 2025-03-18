@@ -186,122 +186,304 @@ export default function Home() {
 
     const results = calculateResults(analysis);
 
-    // Function to generate PDF screenshot
+    // Generate a PDF using window.open for more reliable downloading
     const generatePdf = async () => {
-        if (!editorialContentRef.current || !analysisContentRef.current) return;
-        
-        setCapturingPdf(true);
         try {
-            // Set up PDF document
+            setCapturingPdf(true);
+            
             const pdf = new jsPDF({
                 orientation: 'portrait',
-                unit: 'px',
-                format: 'a4'
+                unit: 'mm',
+                format: 'a4',
             });
             
-            const fileTitle = file?.name || "eBook Analysis";
+            const fileTitle = file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis";
+            const dateString = new Date().toLocaleDateString();
             
-            // Add title
+            // Title page
             pdf.setFontSize(22);
-            pdf.setTextColor(24, 144, 255); // Blue color
-            pdf.text(`AI Analysis Report: ${fileTitle.substring(0, 30)}${fileTitle.length > 30 ? '...' : ''}`, 20, 30);
+            pdf.setTextColor(24, 144, 255);
+            pdf.text("eBook AI Analysis Report", 20, 30, { align: 'center' });
             
-            // Add date
-            const date = new Date().toLocaleDateString();
+            // Filename
+            pdf.setFontSize(14);
+            pdf.text(`File: ${fileTitle}`, 20, 50);
+            
+            // Date
             pdf.setFontSize(12);
-            pdf.setTextColor(100, 100, 100); // Gray color
-            pdf.text(`Generated on: ${date}`, 20, 50);
+            pdf.setTextColor(100, 100, 100);
+            pdf.text(`Generated: ${dateString}`, 20, 60);
             
-            // Capture the editorial content
-            if (constructiveCriticism && editorialContentRef.current) {
-                const editorialCanvas = await html2canvas(editorialContentRef.current, {
-                    scale: 1.5,
-                    useCORS: true,
-                    logging: false
+            // Overall score
+            pdf.setFontSize(16);
+            pdf.setTextColor(0, 0, 0);
+            pdf.text(`Overall Score: ${results.totalScore}/${results.maxPossibleScore} (${results.percentage}%)`, 20, 80);
+            
+            // Strengths
+            if (results.strengths.length > 0) {
+                pdf.setFontSize(14);
+                pdf.setTextColor(46, 184, 46); // Green
+                pdf.text("Strengths:", 20, 100);
+                
+                let y = 110;
+                results.strengths.forEach((strength, index) => {
+                    pdf.setFontSize(12);
+                    pdf.text(`• ${strength}`, 25, y);
+                    y += 10;
+                });
+            }
+            
+            // Add a new page
+            pdf.addPage();
+            
+            // Analysis Table
+            pdf.setFontSize(16);
+            pdf.setTextColor(24, 144, 255);
+            pdf.text("Detailed Analysis", 20, 20);
+            
+            let y = 30;
+            analysis.forEach((item, index) => {
+                // Parameter name
+                pdf.setFontSize(14);
+                pdf.setTextColor(0, 0, 0);
+                pdf.text(`${index + 1}. ${item.Parameter}`, 20, y);
+                y += 7;
+                
+                // Score
+                pdf.setFontSize(12);
+                pdf.text(`Score: ${item.Score}/5`, 25, y);
+                y += 7;
+                
+                // Justification
+                pdf.setFontSize(10);
+                const justLines = pdf.splitTextToSize(item.Justification, 170);
+                justLines.forEach(line => {
+                    pdf.text(line, 25, y);
+                    y += 6;
                 });
                 
-                const editorialImgData = editorialCanvas.toDataURL('image/png');
+                y += 10;
                 
-                // If editorial canvas is too tall, resize it
-                const editorialImgProps = pdf.getImageProperties(editorialImgData);
-                const editorialPdfWidth = pdf.internal.pageSize.getWidth() - 40;
-                const editorialPdfHeight = (editorialImgProps.height * editorialPdfWidth) / editorialImgProps.width;
-                
-                // Add editorial section heading
-                pdf.setFontSize(16);
-                pdf.setTextColor(250, 140, 22); // Orange color
-                pdf.text('Editorial Assessment', 20, 70);
-                
-                // Add editorial content
-                pdf.addImage(editorialImgData, 'PNG', 20, 80, editorialPdfWidth, editorialPdfHeight);
-                
-                // Add a new page if the editorial content is too tall
-                if (editorialPdfHeight > 500) {
+                // Add new page if needed
+                if (y > 270) {
                     pdf.addPage();
-                    pdf.setFontSize(16);
-                    pdf.setTextColor(24, 144, 255); // Blue color
-                    pdf.text('Analysis Details', 20, 30);
-                } else {
-                    // If we're still on the first page
-                    pdf.setFontSize(16);
-                    pdf.setTextColor(24, 144, 255); // Blue color
-                    pdf.text('Analysis Details', 20, 100 + editorialPdfHeight);
+                    y = 20;
                 }
-            }
-            
-            // Capture the analysis content
-            const analysisCanvas = await html2canvas(analysisContentRef.current, {
-                scale: 1.5,
-                useCORS: true,
-                logging: false
             });
             
-            const analysisImgData = analysisCanvas.toDataURL('image/png');
-            
-            const analysisImgProps = pdf.getImageProperties(analysisImgData);
-            const analysisPdfWidth = pdf.internal.pageSize.getWidth() - 40;
-            const analysisPdfHeight = (analysisImgProps.height * analysisPdfWidth) / analysisImgProps.width;
-            
-            if (constructiveCriticism) {
-                // If we have editorial content, position the analysis content accordingly
-                if (editorialContentRef.current) {
-                    const editorialCanvas = await html2canvas(editorialContentRef.current, {
-                        scale: 1.5
-                    });
-                    const editorialImgProps = pdf.getImageProperties(editorialCanvas.toDataURL('image/png'));
-                    const editorialPdfHeight = (editorialImgProps.height * analysisPdfWidth) / editorialImgProps.width;
-                    
-                    if (editorialPdfHeight > 500) {
-                        // If editorial pushed to new page
-                        pdf.addImage(analysisImgData, 'PNG', 20, 50, analysisPdfWidth, analysisPdfHeight);
-                    } else {
-                        // If editorial is on first page
-                        pdf.addImage(analysisImgData, 'PNG', 20, 120 + editorialPdfHeight, analysisPdfWidth, analysisPdfHeight);
-                    }
-                }
-            } else {
-                // If no editorial content, just add analysis content
-                pdf.addImage(analysisImgData, 'PNG', 20, 80, analysisPdfWidth, analysisPdfHeight);
+            // Add another page for summary if available
+            if (summary) {
+                pdf.addPage();
+                pdf.setFontSize(16);
+                pdf.setTextColor(24, 144, 255);
+                pdf.text("Book Summary", 20, 20);
+                
+                pdf.setFontSize(12);
+                pdf.setTextColor(0, 0, 0);
+                const summaryLines = pdf.splitTextToSize(summary, 170);
+                let y = 30;
+                summaryLines.forEach(line => {
+                    pdf.text(line, 20, y);
+                    y += 6;
+                });
             }
             
-            // Add footer
+            // Add editorial feedback if available
+            if (constructiveCriticism) {
+                pdf.addPage();
+                pdf.setFontSize(16);
+                pdf.setTextColor(250, 140, 22);
+                pdf.text("Editorial Feedback", 20, 20);
+                
+                pdf.setFontSize(12);
+                pdf.setTextColor(0, 0, 0);
+                const criticismLines = pdf.splitTextToSize(constructiveCriticism, 170);
+                let y = 30;
+                criticismLines.forEach(line => {
+                    pdf.text(line, 20, y);
+                    y += 6;
+                    
+                    if (y > 270) {
+                        pdf.addPage();
+                        y = 20;
+                    }
+                });
+            }
+            
+            // Footer on all pages
             const pageCount = pdf.getNumberOfPages();
             for (let i = 1; i <= pageCount; i++) {
                 pdf.setPage(i);
                 pdf.setFontSize(10);
                 pdf.setTextColor(150, 150, 150);
-                pdf.text(`eBook AI Analyzer Report - Page ${i} of ${pageCount}`, 20, pdf.internal.pageSize.getHeight() - 10);
+                pdf.text(`Page ${i} of ${pageCount}`, 20, 285);
+                pdf.text(`eBook AI Analyzer Report`, 105, 285, { align: 'center' });
             }
             
-            // Save the PDF
-            pdf.save(`${fileTitle.replace(/\.[^/.]+$/, "")}_analysis.pdf`);
+            // Force the PDF to download
+            const pdfOutput = pdf.output('datauristring');
+            const pdfFilename = `${fileTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_analysis.pdf`;
+            
+            // Create a download link and click it programmatically
+            const downloadLink = document.createElement('a');
+            downloadLink.href = pdfOutput;
+            downloadLink.download = pdfFilename;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
             
             setPdfSuccess(true);
+            setTimeout(() => setPdfSuccess(false), 5000);
         } catch (error) {
-            console.error("Error generating PDF: ", error);
-            alert("Failed to generate PDF report. Please try again.");
+            console.error("PDF generation error:", error);
+            alert("PDF generation failed. Trying simple version...");
+            generateSimplePdf();
         } finally {
             setCapturingPdf(false);
+        }
+    };
+
+    // Improved simple text-only PDF generation for better download handling
+    const generateSimplePdf = () => {
+        try {
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+            
+            const fileTitle = file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis";
+            
+            // Add title
+            pdf.setFontSize(16);
+            pdf.setTextColor(24, 144, 255);
+            const title = `AI Analysis Report: ${fileTitle}`;
+            pdf.text(title, 10, 15);
+            
+            // Add date
+            pdf.setFontSize(10);
+            pdf.setTextColor(100, 100, 100);
+            pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 10, 25);
+            
+            // Add editorial assessment if available
+            if (constructiveCriticism) {
+                pdf.setFontSize(14);
+                pdf.setTextColor(250, 140, 22);
+                pdf.text('Editorial Assessment', 10, 35);
+                
+                // Split criticism into lines
+                const criticismLines = constructiveCriticism.split('\n');
+                let y = 45;
+                pdf.setFontSize(10);
+                pdf.setTextColor(0, 0, 0);
+                
+                criticismLines.forEach(line => {
+                    if (line.trim() === '') return; // Skip empty lines
+                    
+                    const splitLines = pdf.splitTextToSize(line, 180);
+                    if (!splitLines || splitLines.length === 0) return;
+                    
+                    splitLines.forEach(splitLine => {
+                        pdf.text(splitLine, 10, y);
+                        y += 5;
+                        if (y > 280) {
+                            pdf.addPage();
+                            y = 20;
+                        }
+                    });
+                    y += 5;
+                });
+                
+                pdf.addPage();
+                y = 20;
+            }
+            
+            // Add analysis results
+            pdf.setFontSize(14);
+            pdf.setTextColor(24, 144, 255);
+            pdf.text('Analysis Results', 10, 20);
+            
+            let y = 30;
+            analysis.forEach((item, index) => {
+                if (!item || !item.Parameter) return; // Skip invalid items
+                
+                pdf.setFontSize(12);
+                pdf.setTextColor(0, 0, 0);
+                pdf.text(`${index + 1}. ${item.Parameter}: Score ${item.Score}/5`, 10, y);
+                y += 7;
+                
+                if (item.Justification) {
+                    pdf.setFontSize(10);
+                    try {
+                        const justLines = pdf.splitTextToSize(item.Justification, 180);
+                        if (justLines && justLines.length > 0) {
+                            justLines.forEach(line => {
+                                pdf.text(line, 15, y);
+                                y += 5;
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Error splitting text:", e);
+                    }
+                }
+                
+                y += 5;
+                
+                if (y > 280) {
+                    pdf.addPage();
+                    y = 20;
+                }
+            });
+            
+            // Add summary
+            if (summary) {
+                if (y > 240) {
+                    pdf.addPage();
+                    y = 20;
+                }
+                
+                pdf.setFontSize(14);
+                pdf.setTextColor(24, 144, 255);
+                pdf.text('Book Summary', 10, y);
+                y += 10;
+                
+                pdf.setFontSize(10);
+                pdf.setTextColor(0, 0, 0);
+                
+                try {
+                    const summaryLines = pdf.splitTextToSize(summary, 180);
+                    if (summaryLines && summaryLines.length > 0) {
+                        summaryLines.forEach(line => {
+                            pdf.text(line, 10, y);
+                            y += 5;
+                            if (y > 280) {
+                                pdf.addPage();
+                                y = 20;
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error("Error splitting summary text:", e);
+                }
+            }
+            
+            // Add footer to all pages
+            const pageCount = pdf.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                pdf.setPage(i);
+                pdf.setFontSize(8);
+                pdf.setTextColor(150, 150, 150);
+                pdf.text(`eBook AI Analyzer Report - Page ${i} of ${pageCount}`, 10, 290);
+            }
+            
+            // Save the PDF with immediate download
+            const pdfFileName = `${fileTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_analysis_text.pdf`;
+            console.log("Saving text PDF:", pdfFileName);
+            pdf.save(pdfFileName);
+            return true;
+        } catch (error) {
+            console.error("Fallback PDF generation failed:", error);
+            return false;
         }
     };
 
@@ -330,7 +512,7 @@ export default function Home() {
                                     <span>Upload Your eBook</span>
                                 </div>
                             } 
-                            bordered
+                            variant="outlined"
                             hoverable
                             className="custom-card"
                             style={{ 
@@ -419,6 +601,20 @@ export default function Home() {
                                 {capturingPdf ? 'Generating PDF Report...' : 'Generate PDF Report with UI Screenshot'}
                             </Button>
                             
+                            <Button 
+                                type="default"
+                                icon={<FilePdfOutlined />}
+                                onClick={generateSimplePdf}
+                                size="middle"
+                                style={{
+                                    marginLeft: '10px',
+                                    height: 'auto',
+                                    padding: '8px 15px',
+                                }}
+                            >
+                                Text-Only PDF
+                            </Button>
+                            
                             {pdfSuccess && (
                                 <Alert
                                     message="PDF Report Generated Successfully"
@@ -454,7 +650,7 @@ export default function Home() {
                                             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                                             borderRadius: '8px',
                                         }}
-                                        bordered
+                                        variant="outlined"
                                         hoverable
                                     >
                                         <div ref={editorialContentRef}>
@@ -518,7 +714,7 @@ export default function Home() {
                                         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
                                         borderRadius: '8px',
                                     }}
-                                    bordered
+                                    variant="outlined"
                                     hoverable
                                 >
                                     <div ref={analysisContentRef}>
@@ -651,15 +847,19 @@ export default function Home() {
                                         />
 
                                         {downloadLink && (
-                                            <Button 
+                                            <a 
                                                 href={downloadLink} 
-                                                download 
-                                                type="primary" 
-                                                icon={<DownloadOutlined />}
-                                                style={{ marginTop: '15px' }}
+                                                download="report.csv"
+                                                style={{ textDecoration: 'none' }}
                                             >
-                                                Download CSV Report
-                                            </Button>
+                                                <Button 
+                                                    type="primary" 
+                                                    icon={<DownloadOutlined />}
+                                                    style={{ marginTop: '15px' }}
+                                                >
+                                                    Download CSV Report
+                                                </Button>
+                                            </a>
                                         )}
                                         
                                         <Button 
