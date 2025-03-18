@@ -1,0 +1,30 @@
+{
+  "name": "ebooks-review",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^5.0.0",
+    "@next/font": "^14.2.15",
+    "@types/formidable": "^3.4.5",
+    "antd": "^5.0.0",
+    "axios": "^1.6.0",
+    "formidable": "^3.5.2",
+    "json2csv": "^6.0.0-alpha.2",
+    "next": "^14.0.0",
+    "openai": "^4.87.3",
+    "pdf-parse": "^1.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.10",
+    "@types/react": "19.0.11",
+    "typescript": "5.8.2"
+  }
+}

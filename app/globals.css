@@ -1,0 +1,114 @@
+/* Global styles and animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(24, 144, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(24, 144, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(24, 144, 255, 0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.slide-in {
+  animation: slideInFromRight 0.5s ease-out;
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Custom card styles */
+.custom-card {
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.custom-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Score badges */
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.score-high {
+  background-color: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #52c41a;
+}
+
+.score-medium {
+  background-color: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #faad14;
+}
+
+.score-low {
+  background-color: #fff2f0;
+  border: 1px solid #ffccc7;
+  color: #f5222d;
+}
+
+/* Book summary styling */
+.book-summary {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #1890ff;
+}
+
+.book-prologue {
+  font-style: italic;
+  padding: 15px;
+  background-color: #f0f7ff;
+  border-radius: 8px;
+  position: relative;
+}
+
+.book-prologue::before {
+  content: '"';
+  font-size: 48px;
+  color: #1890ff;
+  position: absolute;
+  top: -10px;
+  left: 5px;
+  opacity: 0.3;
+} 
