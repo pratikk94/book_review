@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     // Create OpenAI prompt
     const prompt = `
-    Analyze the following eBook based on these 10 parameters. Rate each on a scale of 1-10 and provide justification:
+    Analyze the following eBook based on these 10 parameters. Rate each on a scale of 1-5 and provide justification:
     
     1. Readability Score
     2. Content Originality & Plagiarism Detection
@@ -72,9 +72,20 @@ export async function POST(req: NextRequest) {
 
     Provide the output in JSON format as:
     [
-      { "Parameter": "Readability Score", "Score": 8, "Justification": "Clear and well-structured sentences." },
-      { "Parameter": "Content Originality & Plagiarism Detection", "Score": 7, "Justification": "Mostly original but some common phrases detected." }
+      { "Parameter": "Readability Score", "Score": 4, "Justification": "Clear and well-structured sentences." },
+      { "Parameter": "Content Originality & Plagiarism Detection", "Score": 3, "Justification": "Mostly original but some common phrases detected." }
     ]
+
+    Additionally, provide a concise summary of the book (150-200 words) and a compelling prologue (100 words) in this JSON format.
+
+    Most importantly, include a detailed constructive criticism section (minimum 100 words) that provides actionable feedback on how the author could improve the book. This should be specific, balanced, and genuinely helpful for the author's development. Focus on both strengths to build upon and weaknesses to address.
+
+    The full response should be in this JSON format:
+    {
+      "summary": "A comprehensive summary of the main points and value of the book...",
+      "prologue": "An engaging introduction that captures the essence of the book...",
+      "constructiveCriticism": "A detailed analysis of the book's strengths and weaknesses, with specific suggestions for improvement... (minimum 100 words)"
+    }
     `;
 
     console.log("Calling OpenAI API");
@@ -88,10 +99,49 @@ export async function POST(req: NextRequest) {
 
     console.log("OpenAI response received");
     
-    const analysis = JSON.parse(response.choices[0]?.message?.content || "[]");
+    const responseContent = response.choices[0]?.message?.content || "";
+    console.log("Response content:", responseContent);
+    
+    let analysis: Array<{ Parameter: string; Score: number; Justification: string }> = [];
+    try {
+      // Try direct JSON parsing first
+      analysis = JSON.parse(responseContent);
+    } catch (parseError) {
+      console.error("Error parsing OpenAI response as direct JSON:", parseError);
+      
+      // Try with regex pattern matching as a fallback
+      try {
+        // Use a more robust regex that can handle multi-line JSON arrays
+        const analysisMatch = responseContent.match(/\[\s*\{\s*"Parameter"[\s\S]*?\}\s*\]/);
+        if (analysisMatch) {
+          analysis = JSON.parse(analysisMatch[0]);
+        }
+      } catch (regexError) {
+        console.error("Error extracting JSON with regex:", regexError);
+      }
+    }
+    
+    // Check if analysis is empty and provide a default if needed
+    if (!analysis || analysis.length === 0) {
+      console.warn("Analysis array is empty, using default values");
+      analysis = [
+        { 
+          Parameter: "Analysis Failed", 
+          Score: 0, 
+          Justification: "The AI could not generate a proper analysis. Please try again with a different document." 
+        }
+      ];
+    }
 
     // Generate CSV
-    const csvData = parse(analysis);
+    let csvData = "";
+    try {
+      csvData = parse(analysis);
+    } catch (csvError) {
+      console.error("Error generating CSV:", csvError);
+      csvData = "Parameter,Score,Justification\nError,0,Failed to generate CSV report";
+    }
+    
     const csvPath = join(publicDir, 'report.csv');
     
     // Write CSV to file
@@ -107,6 +157,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ analysis, downloadLink: "/report.csv" });
   } catch (error) {
     console.error("Error processing request:", error);
-    return NextResponse.json({ error: "Internal server error", details: String(error) }, { status: 500 });
+    
+    // Provide more detailed error information
+    let errorMessage = "Internal server error";
+    let errorDetails = String(error);
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      errorDetails = error.stack || String(error);
+    }
+    
+    return NextResponse.json({ 
+      error: errorMessage, 
+      details: errorDetails,
+      stage: "pdf_processing" // Help identify where the error occurred
+    }, { status: 500 });
   }
 } 

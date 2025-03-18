@@ -111,4 +111,101 @@
   top: -10px;
   left: 5px;
   opacity: 0.3;
+}
+
+/* Overall score section styling */
+.overall-score-section {
+  background-color: #fafafa;
+  padding: 20px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.overall-score-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: linear-gradient(90deg, #1890ff, #52c41a);
+}
+
+.strength-item {
+  color: #52c41a;
+  margin-bottom: 8px;
+}
+
+.improvement-item {
+  color: #fa8c16;
+  margin-bottom: 8px;
+}
+
+/* Improve animations */
+@keyframes dashboardAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dashboard-animate {
+  animation: dashboardAppear 0.8s ease-out;
+}
+
+/* Constructive criticism styling */
+.constructive-criticism {
+  background-color: #fffcf7;
+  padding: 18px;
+  border-radius: 8px;
+  border-left: 4px solid #fa8c16;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.constructive-criticism::before {
+  content: '"';
+  font-size: 48px;
+  color: #fa8c16;
+  position: absolute;
+  top: -10px;
+  left: 5px;
+  opacity: 0.2;
+}
+
+.constructive-criticism h4 {
+  color: #fa8c16;
+  margin-bottom: 10px;
+}
+
+.constructive-criticism p {
+  line-height: 1.6;
+  text-align: justify;
+}
+
+/* Highlighted text in constructive criticism */
+.highlight-tip {
+  background-color: rgba(250, 140, 22, 0.12);
+  border-radius: 3px;
+  padding: 2px 4px;
+  margin: 0 2px;
+  font-weight: 500;
+}
+
+/* Animated entry for editorial feedback */
+@keyframes highlightFade {
+  0% { background-color: rgba(250, 140, 22, 0.3); }
+  100% { background-color: rgba(250, 140, 22, 0.12); }
+}
+
+.feedback-entry {
+  animation: highlightFade 2s ease-out;
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 2px solid rgba(250, 140, 22, 0.5);
 } 
