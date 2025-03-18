@@ -84,13 +84,13 @@ export async function POST(request: NextRequest) {
 
     Additionally, provide a concise summary of the book (150-200 words) and a compelling prologue (100 words) in this JSON format.
 
-    Most importantly, include a detailed constructive criticism section (minimum 100 words) that provides actionable feedback on how the author could improve the book. This should be specific, balanced, and genuinely helpful for the author's development. Focus on both strengths to build upon and weaknesses to address.
+    Most importantly, include a detailed constructive criticism section (MINIMUM 200 WORDS) that provides actionable feedback on how the author could improve the book. This should be specific, balanced, and genuinely helpful for the author's development. Focus on both strengths to build upon and weaknesses to address. Structure the feedback as a professional editorial assessment with clear recommendations.
 
     The full response should be in this JSON format:
     {
       "summary": "A comprehensive summary of the main points and value of the book...",
       "prologue": "An engaging introduction that captures the essence of the book...",
-      "constructiveCriticism": "A detailed analysis of the book's strengths and weaknesses, with specific suggestions for improvement... (minimum 100 words)"
+      "constructiveCriticism": "A detailed analysis of the book's strengths and weaknesses, with specific suggestions for improvement... (minimum 200 words)"
     }
     `;
 

@@ -195,6 +195,7 @@
   padding: 2px 4px;
   margin: 0 2px;
   font-weight: 500;
+  animation: softPulse 3s infinite;
 }
 
 /* Animated entry for editorial feedback */
@@ -208,4 +209,40 @@
   margin-bottom: 12px;
   padding-left: 8px;
   border-left: 2px solid rgba(250, 140, 22, 0.5);
+}
+
+/* Editorial Assessment Card styling */
+.editorial-card {
+  background: linear-gradient(to right, rgba(250, 140, 22, 0.05), rgba(255, 255, 255, 0.8));
+  border-top: 4px solid #fa8c16 !important;
+  margin-bottom: 20px;
+}
+
+/* Pulsing effect for recommendations */
+@keyframes softPulse {
+  0% { background-color: rgba(250, 140, 22, 0.1); }
+  50% { background-color: rgba(250, 140, 22, 0.15); }
+  100% { background-color: rgba(250, 140, 22, 0.1); }
+}
+
+/* PDF button styling */
+.pdf-button {
+  background: linear-gradient(45deg, #1890ff, #722ed1) !important;
+  border: none !important;
+  transition: all 0.3s ease;
+}
+
+.pdf-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* PDF success message */
+@keyframes successFadeIn {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.pdf-success {
+  animation: successFadeIn 0.5s ease-out;
 } 

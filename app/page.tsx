@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Layout, Upload, Button, Table, Spin, Alert, Card, Row, Col, Typography, Divider, Progress } from "antd";
-import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined } from "@ant-design/icons";
+import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined } from "@ant-design/icons";
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 // For App Router, we use Next.js's built-in CSS import support
 // Remove the CSS import and add style through tailwind or inline styles
 // import 'antd/dist/reset.css';
@@ -21,7 +23,13 @@ export default function Home() {
     const [apiTest, setApiTest] = useState<string>("");
     const [analysisStage, setAnalysisStage] = useState<string>("");
     const [progress, setProgress] = useState<number>(0);
-
+    const [capturingPdf, setCapturingPdf] = useState(false);
+    const [pdfSuccess, setPdfSuccess] = useState(false);
+    
+    // Refs for capturing PDF content
+    const editorialContentRef = useRef<HTMLDivElement>(null);
+    const analysisContentRef = useRef<HTMLDivElement>(null);
+    
     const handleFileChange = (info: any) => {
         if (info.file.status === "done") {
             setFile(info.file.originFileObj);
@@ -178,6 +186,125 @@ export default function Home() {
 
     const results = calculateResults(analysis);
 
+    // Function to generate PDF screenshot
+    const generatePdf = async () => {
+        if (!editorialContentRef.current || !analysisContentRef.current) return;
+        
+        setCapturingPdf(true);
+        try {
+            // Set up PDF document
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'px',
+                format: 'a4'
+            });
+            
+            const fileTitle = file?.name || "eBook Analysis";
+            
+            // Add title
+            pdf.setFontSize(22);
+            pdf.setTextColor(24, 144, 255); // Blue color
+            pdf.text(`AI Analysis Report: ${fileTitle.substring(0, 30)}${fileTitle.length > 30 ? '...' : ''}`, 20, 30);
+            
+            // Add date
+            const date = new Date().toLocaleDateString();
+            pdf.setFontSize(12);
+            pdf.setTextColor(100, 100, 100); // Gray color
+            pdf.text(`Generated on: ${date}`, 20, 50);
+            
+            // Capture the editorial content
+            if (constructiveCriticism && editorialContentRef.current) {
+                const editorialCanvas = await html2canvas(editorialContentRef.current, {
+                    scale: 1.5,
+                    useCORS: true,
+                    logging: false
+                });
+                
+                const editorialImgData = editorialCanvas.toDataURL('image/png');
+                
+                // If editorial canvas is too tall, resize it
+                const editorialImgProps = pdf.getImageProperties(editorialImgData);
+                const editorialPdfWidth = pdf.internal.pageSize.getWidth() - 40;
+                const editorialPdfHeight = (editorialImgProps.height * editorialPdfWidth) / editorialImgProps.width;
+                
+                // Add editorial section heading
+                pdf.setFontSize(16);
+                pdf.setTextColor(250, 140, 22); // Orange color
+                pdf.text('Editorial Assessment', 20, 70);
+                
+                // Add editorial content
+                pdf.addImage(editorialImgData, 'PNG', 20, 80, editorialPdfWidth, editorialPdfHeight);
+                
+                // Add a new page if the editorial content is too tall
+                if (editorialPdfHeight > 500) {
+                    pdf.addPage();
+                    pdf.setFontSize(16);
+                    pdf.setTextColor(24, 144, 255); // Blue color
+                    pdf.text('Analysis Details', 20, 30);
+                } else {
+                    // If we're still on the first page
+                    pdf.setFontSize(16);
+                    pdf.setTextColor(24, 144, 255); // Blue color
+                    pdf.text('Analysis Details', 20, 100 + editorialPdfHeight);
+                }
+            }
+            
+            // Capture the analysis content
+            const analysisCanvas = await html2canvas(analysisContentRef.current, {
+                scale: 1.5,
+                useCORS: true,
+                logging: false
+            });
+            
+            const analysisImgData = analysisCanvas.toDataURL('image/png');
+            
+            const analysisImgProps = pdf.getImageProperties(analysisImgData);
+            const analysisPdfWidth = pdf.internal.pageSize.getWidth() - 40;
+            const analysisPdfHeight = (analysisImgProps.height * analysisPdfWidth) / analysisImgProps.width;
+            
+            if (constructiveCriticism) {
+                // If we have editorial content, position the analysis content accordingly
+                if (editorialContentRef.current) {
+                    const editorialCanvas = await html2canvas(editorialContentRef.current, {
+                        scale: 1.5
+                    });
+                    const editorialImgProps = pdf.getImageProperties(editorialCanvas.toDataURL('image/png'));
+                    const editorialPdfHeight = (editorialImgProps.height * analysisPdfWidth) / editorialImgProps.width;
+                    
+                    if (editorialPdfHeight > 500) {
+                        // If editorial pushed to new page
+                        pdf.addImage(analysisImgData, 'PNG', 20, 50, analysisPdfWidth, analysisPdfHeight);
+                    } else {
+                        // If editorial is on first page
+                        pdf.addImage(analysisImgData, 'PNG', 20, 120 + editorialPdfHeight, analysisPdfWidth, analysisPdfHeight);
+                    }
+                }
+            } else {
+                // If no editorial content, just add analysis content
+                pdf.addImage(analysisImgData, 'PNG', 20, 80, analysisPdfWidth, analysisPdfHeight);
+            }
+            
+            // Add footer
+            const pageCount = pdf.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                pdf.setPage(i);
+                pdf.setFontSize(10);
+                pdf.setTextColor(150, 150, 150);
+                pdf.text(`eBook AI Analyzer Report - Page ${i} of ${pageCount}`, 20, pdf.internal.pageSize.getHeight() - 10);
+            }
+            
+            // Save the PDF
+            pdf.save(`${fileTitle.replace(/\.[^/.]+$/, "")}_analysis.pdf`);
+            
+            setPdfSuccess(true);
+        } catch (error) {
+            console.error("Error generating PDF: ", error);
+            alert("Failed to generate PDF report. Please try again.");
+        } finally {
+            setCapturingPdf(false);
+        }
+    };
+
     return (
         <Layout style={{ minHeight: '100vh' }}>
             <Header style={{ 
@@ -272,194 +399,287 @@ export default function Home() {
                 </Row>
 
                 {analysis?.length > 0 && (
-                    <Row justify="center" gutter={[0, 24]}>
-                        <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                            <Card 
-                                title={
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <BookOutlined style={{ marginRight: 8 }} />
-                                        <span>Analysis Report</span>
-                                    </div>
-                                }
-                                className="custom-card fade-in"
-                                style={{ 
-                                    marginTop: '20px',
-                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                    borderRadius: '8px',
+                    <>
+                        {/* Generate PDF Report Button */}
+                        <Row justify="center" style={{ marginTop: '20px' }}>
+                            <Button 
+                                type="primary"
+                                icon={<FilePdfOutlined />}
+                                onClick={generatePdf}
+                                loading={capturingPdf}
+                                size="large"
+                                className="pdf-button"
+                                style={{
+                                    height: 'auto',
+                                    padding: '10px 24px',
+                                    fontSize: '16px',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                                 }}
-                                bordered
-                                hoverable
                             >
-                                {summary && (
-                                    <div className="book-summary fade-in" style={{ marginBottom: '20px' }}>
-                                        <Title level={4}>
-                                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                                                <span>Book Summary</span>
-                                            </div>
-                                        </Title>
-                                        <Paragraph style={{ fontSize: '15px', lineHeight: '1.8' }}>
-                                            {summary}
-                                        </Paragraph>
-                                        <Divider />
-                                    </div>
-                                )}
-                                
-                                {prologue && (
-                                    <div className="book-prologue slide-in" style={{ marginBottom: '20px' }}>
-                                        <Title level={4}>
-                                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                <CommentOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                                                <span>Compelling Prologue</span>
-                                            </div>
-                                        </Title>
-                                        <Paragraph style={{ fontSize: '15px', lineHeight: '1.8', fontStyle: 'italic' }}>
-                                            {prologue}
-                                        </Paragraph>
-                                        <Divider />
-                                    </div>
-                                )}
-                                
-                                {constructiveCriticism && (
-                                    <div className="constructive-criticism fade-in">
-                                        <Title level={4}>
+                                {capturingPdf ? 'Generating PDF Report...' : 'Generate PDF Report with UI Screenshot'}
+                            </Button>
+                            
+                            {pdfSuccess && (
+                                <Alert
+                                    message="PDF Report Generated Successfully"
+                                    description="Your PDF has been saved to your downloads folder."
+                                    type="success"
+                                    showIcon
+                                    closable
+                                    onClose={() => setPdfSuccess(false)}
+                                    className="pdf-success"
+                                    style={{ 
+                                        marginTop: '10px',
+                                        width: '100%',
+                                        maxWidth: '600px',
+                                    }}
+                                />
+                            )}
+                        </Row>
+
+                        {/* Editorial Feedback Card - Separate prominent section */}
+                        {constructiveCriticism && (
+                            <Row justify="center" gutter={[0, 24]}>
+                                <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                    <Card 
+                                        title={
                                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                                 <EditOutlined style={{ marginRight: 8, color: '#fa8c16' }} />
-                                                <span>Editorial Feedback</span>
+                                                <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Editorial Assessment</span>
                                             </div>
-                                        </Title>
-                                        <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
-                                            {constructiveCriticism.split('\n').map((paragraph, i) => {
-                                                // Highlight suggestions and recommendations with special formatting
-                                                const enhancedText = paragraph
-                                                    .replace(/should consider|recommend|could improve|suggest|try to|focus on|needs to|must|important to/gi, match => 
-                                                        `<span class="highlight-tip">${match}</span>`);
-                                                
-                                                return (
-                                                    <div className="feedback-entry" key={i}>
-                                                        <Paragraph
-                                                            dangerouslySetInnerHTML={{ __html: enhancedText }}
-                                                        />
-                                                    </div>
-                                                );
-                                            })}
+                                        }
+                                        className="custom-card editorial-card fade-in"
+                                        style={{ 
+                                            marginTop: '20px',
+                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                            borderRadius: '8px',
+                                        }}
+                                        bordered
+                                        hoverable
+                                    >
+                                        <div ref={editorialContentRef}>
+                                            <Alert
+                                                message="Professional Feedback & Recommendations"
+                                                description="This section provides detailed, constructive feedback about the book with actionable recommendations to enhance its quality and impact."
+                                                type="warning"
+                                                showIcon
+                                                style={{ marginBottom: '20px' }}
+                                            />
+                                            
+                                            {/* Key Recommendation Highlight */}
+                                            <div style={{
+                                                padding: '15px',
+                                                background: 'rgba(250, 140, 22, 0.08)',
+                                                borderRadius: '8px',
+                                                marginBottom: '20px',
+                                                border: '1px dashed #fa8c16'
+                                            }}>
+                                                <Title level={5} style={{ color: '#fa8c16', marginTop: 0 }}>EDITOR'S KEY RECOMMENDATION</Title>
+                                                <Paragraph style={{ fontWeight: 500 }}>
+                                                    {constructiveCriticism.split('\n')[0]}
+                                                </Paragraph>
+                                            </div>
+                                            
+                                            <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
+                                                {constructiveCriticism.split('\n').slice(1).map((paragraph, i) => {
+                                                    // Highlight suggestions and recommendations with special formatting
+                                                    const enhancedText = paragraph
+                                                        .replace(/should consider|recommend|could improve|suggest|try to|focus on|needs to|must|important to|enhance|revise|develop|strengthen|add|remove|modify|prioritize/gi, match => 
+                                                            `<span class="highlight-tip">${match}</span>`);
+                                                    
+                                                    return (
+                                                        <div className="feedback-entry" key={i}>
+                                                            <Paragraph
+                                                                dangerouslySetInnerHTML={{ __html: enhancedText }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                        <Divider />
-                                    </div>
-                                )}
-                                
-                                {/* Overall Score Section */}
-                                <div className="overall-score-section fade-in" style={{ marginBottom: '20px' }}>
-                                    <Title level={4}>Overall Assessment</Title>
-                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-                                        <Progress 
-                                            className="dashboard-animate"
-                                            type="dashboard" 
-                                            percent={results.percentage} 
-                                            width={120}
-                                            format={() => (
-                                                <div>
-                                                    <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{results.totalScore}</div>
-                                                    <div style={{ fontSize: '12px' }}>out of {results.maxPossibleScore}</div>
+                                    </Card>
+                                </Col>
+                            </Row>
+                        )}
+                        
+                        {/* Main Analysis Report Card */}
+                        <Row justify="center" gutter={[0, 24]}>
+                            <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                <Card 
+                                    title={
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <BookOutlined style={{ marginRight: 8 }} />
+                                            <span>Analysis Report</span>
+                                        </div>
+                                    }
+                                    className="custom-card fade-in"
+                                    style={{ 
+                                        marginTop: '20px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '8px',
+                                    }}
+                                    bordered
+                                    hoverable
+                                >
+                                    <div ref={analysisContentRef}>
+                                        {summary && (
+                                            <div className="book-summary fade-in" style={{ marginBottom: '20px' }}>
+                                                <Title level={4}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                                        <span>Book Summary</span>
+                                                    </div>
+                                                </Title>
+                                                <Paragraph style={{ fontSize: '15px', lineHeight: '1.8' }}>
+                                                    {summary}
+                                                </Paragraph>
+                                                <Divider />
+                                            </div>
+                                        )}
+                                        
+                                        {prologue && (
+                                            <div className="book-prologue slide-in" style={{ marginBottom: '20px' }}>
+                                                <Title level={4}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <CommentOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                                        <span>Compelling Prologue</span>
+                                                    </div>
+                                                </Title>
+                                                <Paragraph style={{ fontSize: '15px', lineHeight: '1.8', fontStyle: 'italic' }}>
+                                                    {prologue}
+                                                </Paragraph>
+                                                <Divider />
+                                            </div>
+                                        )}
+                                        
+                                        {/* Overall Score Section */}
+                                        <div className="overall-score-section fade-in" style={{ marginBottom: '20px' }}>
+                                            <Title level={4}>Overall Assessment</Title>
+                                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                                                <Progress 
+                                                    className="dashboard-animate"
+                                                    type="dashboard" 
+                                                    percent={results.percentage} 
+                                                    width={120}
+                                                    format={() => (
+                                                        <div>
+                                                            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{results.totalScore}</div>
+                                                            <div style={{ fontSize: '12px' }}>out of {results.maxPossibleScore}</div>
+                                                        </div>
+                                                    )}
+                                                    strokeColor={
+                                                        results.percentage >= 80 ? '#52c41a' : // Excellent
+                                                        results.percentage >= 60 ? '#faad14' : // Good
+                                                        '#f5222d'                             // Needs improvement
+                                                    }
+                                                />
+                                            </div>
+                                            
+                                            {results.strengths.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <Title level={5}>Strengths</Title>
+                                                    <ul>
+                                                        {results.strengths.map((strength, index) => (
+                                                            <li className="strength-item" key={index}>{strength}</li>
+                                                        ))}
+                                                    </ul>
                                                 </div>
                                             )}
-                                            strokeColor={
-                                                results.percentage >= 80 ? '#52c41a' : // Excellent
-                                                results.percentage >= 60 ? '#faad14' : // Good
-                                                '#f5222d'                             // Needs improvement
-                                            }
+                                            
+                                            {results.improvements.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <Title level={5}>Recommended Improvements</Title>
+                                                    <ul>
+                                                        {results.improvements.map((item, index) => (
+                                                            <li className="improvement-item" key={index}>
+                                                                <strong>{item.area}</strong> (Score: {item.score}/5): {item.justification}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Score interpretation */}
+                                            <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
+                                                <Alert
+                                                    message={
+                                                        results.percentage >= 80 ? "Excellent" :
+                                                        results.percentage >= 60 ? "Good" :
+                                                        results.percentage >= 40 ? "Average" :
+                                                        "Needs Improvement"
+                                                    }
+                                                    description={
+                                                        results.percentage >= 80 ? "This eBook demonstrates exceptional quality across most parameters." :
+                                                        results.percentage >= 60 ? "This eBook has good overall quality with some areas for improvement." :
+                                                        results.percentage >= 40 ? "This eBook meets basic standards but has several areas that need attention." :
+                                                        "This eBook requires significant improvements in multiple areas."
+                                                    }
+                                                    type={
+                                                        results.percentage >= 80 ? "success" :
+                                                        results.percentage >= 60 ? "info" :
+                                                        results.percentage >= 40 ? "warning" :
+                                                        "error"
+                                                    }
+                                                    showIcon
+                                                />
+                                            </div>
+                                            
+                                            {/* Extra guidance for low scores */}
+                                            {results.percentage < 40 && (
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <Title level={5}>General Improvement Suggestions</Title>
+                                                    <ul>
+                                                        <li>Consider having the text professionally edited to improve readability and flow.</li>
+                                                        <li>Check for grammatical errors and typos throughout the document.</li>
+                                                        <li>Work on improving the structure with clear chapter divisions and sections.</li>
+                                                        <li>Ensure formatting is consistent throughout the book.</li>
+                                                        <li>Consider adding more original insights or examples to enhance content value.</li>
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            
+                                            <Divider />
+                                        </div>
+                                        
+                                        <Title level={4}>Detailed Analysis</Title>
+                                        <Table 
+                                            columns={columns} 
+                                            dataSource={analysis} 
+                                            pagination={false} 
+                                            rowKey="Parameter"
+                                            style={{ marginBottom: '20px' }}
                                         />
-                                    </div>
-                                    
-                                    {results.strengths.length > 0 && (
-                                        <div style={{ marginBottom: '15px' }}>
-                                            <Title level={5}>Strengths</Title>
-                                            <ul>
-                                                {results.strengths.map((strength, index) => (
-                                                    <li className="strength-item" key={index}>{strength}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                    
-                                    {results.improvements.length > 0 && (
-                                        <div style={{ marginBottom: '15px' }}>
-                                            <Title level={5}>Recommended Improvements</Title>
-                                            <ul>
-                                                {results.improvements.map((item, index) => (
-                                                    <li className="improvement-item" key={index}>
-                                                        <strong>{item.area}</strong> (Score: {item.score}/5): {item.justification}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                    
-                                    {/* Score interpretation */}
-                                    <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
-                                        <Alert
-                                            message={
-                                                results.percentage >= 80 ? "Excellent" :
-                                                results.percentage >= 60 ? "Good" :
-                                                results.percentage >= 40 ? "Average" :
-                                                "Needs Improvement"
-                                            }
-                                            description={
-                                                results.percentage >= 80 ? "This eBook demonstrates exceptional quality across most parameters." :
-                                                results.percentage >= 60 ? "This eBook has good overall quality with some areas for improvement." :
-                                                results.percentage >= 40 ? "This eBook meets basic standards but has several areas that need attention." :
-                                                "This eBook requires significant improvements in multiple areas."
-                                            }
-                                            type={
-                                                results.percentage >= 80 ? "success" :
-                                                results.percentage >= 60 ? "info" :
-                                                results.percentage >= 40 ? "warning" :
-                                                "error"
-                                            }
-                                            showIcon
-                                        />
-                                    </div>
-                                    
-                                    {/* Extra guidance for low scores */}
-                                    {results.percentage < 40 && (
-                                        <div style={{ marginBottom: '20px' }}>
-                                            <Title level={5}>General Improvement Suggestions</Title>
-                                            <ul>
-                                                <li>Consider having the text professionally edited to improve readability and flow.</li>
-                                                <li>Check for grammatical errors and typos throughout the document.</li>
-                                                <li>Work on improving the structure with clear chapter divisions and sections.</li>
-                                                <li>Ensure formatting is consistent throughout the book.</li>
-                                                <li>Consider adding more original insights or examples to enhance content value.</li>
-                                            </ul>
-                                        </div>
-                                    )}
-                                    
-                                    <Divider />
-                                </div>
-                                
-                                <Title level={4}>Detailed Analysis</Title>
-                                <Table 
-                                    columns={columns} 
-                                    dataSource={analysis} 
-                                    pagination={false} 
-                                    rowKey="Parameter"
-                                    style={{ marginBottom: '20px' }}
-                                />
 
-                                {downloadLink && (
-                                    <Button 
-                                        href={downloadLink} 
-                                        download 
-                                        type="primary" 
-                                        icon={<DownloadOutlined />}
-                                        style={{ marginTop: '15px' }}
-                                    >
-                                        Download CSV Report
-                                    </Button>
-                                )}
-                            </Card>
-                        </Col>
-                    </Row>
+                                        {downloadLink && (
+                                            <Button 
+                                                href={downloadLink} 
+                                                download 
+                                                type="primary" 
+                                                icon={<DownloadOutlined />}
+                                                style={{ marginTop: '15px' }}
+                                            >
+                                                Download CSV Report
+                                            </Button>
+                                        )}
+                                        
+                                        <Button 
+                                            type="primary"
+                                            icon={<FilePdfOutlined />}
+                                            onClick={generatePdf}
+                                            loading={capturingPdf}
+                                            className="pdf-button"
+                                            style={{ 
+                                                marginTop: '15px', 
+                                                marginLeft: downloadLink ? '10px' : '0',
+                                            }}
+                                        >
+                                            {capturingPdf ? 'Generating...' : 'Save as PDF'}
+                                        </Button>
+                                    </div>
+                                </Card>
+                            </Col>
+                        </Row>
+                    </>
                 )}
 
                 {analysis.length === 0 && !loading && (
