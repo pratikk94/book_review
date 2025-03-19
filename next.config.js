@@ -10,15 +10,8 @@ const nextConfig = {
       }
     ]
   },
-  api: {
-    responseLimit: false, // No response size limit
-    bodyParser: {
-      sizeLimit: '10mb', // Allow larger file uploads
-    },
-  },
   experimental: {
     serverComponentsExternalPackages: ["pdf-parse"],
-    largePageData: true,
   },
 }
 
