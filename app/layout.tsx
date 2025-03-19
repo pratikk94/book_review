@@ -1,7 +1,7 @@
 import React from 'react';
 import { Inter } from 'next/font/google';
 import './globals.css'; // Import the global CSS file with animations
-import type { Metadata } from 'next'
+import { Metadata } from 'next'
 import DevToolsMessage from './components/DevToolsMessage'
 
 const inter = Inter({ subsets: ['latin'] });
@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>

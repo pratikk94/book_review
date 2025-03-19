@@ -11,6 +11,7 @@ import { saveAs } from 'file-saver';
 import html2canvas from 'html2canvas';
 import { Document as DocxDocument, Packer, Paragraph as DocxParagraph, TextRun, Table as DocxTable, TableCell, TableRow } from 'docx';
 import { Avatar, Tag, Timeline } from 'antd';
+import { App as AntApp } from 'antd';
 // For App Router, we use Next.js's built-in CSS import support
 // Remove the CSS import and add style through tailwind or inline styles
 // import 'antd/dist/reset.css';
@@ -315,6 +316,9 @@ export default function Home() {
     const editorialContentRef = useRef<HTMLDivElement>(null);
     const analysisContentRef = useRef<HTMLDivElement>(null);
     
+    // Create a message API instance
+    const [messageApi, contextHolder] = message.useMessage();
+
     // Enhanced polling logic for job status that's more resilient to errors
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -700,24 +704,28 @@ export default function Home() {
     // Add new function for polling job status
     const pollJobStatus = async (jobId: string, fileIndex: number) => {
         try {
-            // Use the same endpoint as the analysis API
             const response = await fetch(`/api/analyze?jobId=${jobId}&type=status`, {
                 method: 'GET',
                 headers: {
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache'
                 }
             });
             
-            // Handle non-200 responses
+            if (response.status === 400) {
+                // Job not found or invalid - show appropriate message
+                messageApi.error('Analysis job not found or expired. Please try uploading again.');
+                setShowLoader(false);
+                setFiles(prev => prev.map((f, i) => 
+                    i === fileIndex ? { ...f, status: 'error', error: 'Job expired or not found' } : f
+                ));
+                return;
+            }
+
             if (!response.ok) {
-                if (response.status === 404) {
-                    // Job not found - might have expired or been cleaned up
-                    throw new Error('Analysis job not found. It may have expired.');
-                }
                 throw new Error(`Server returned ${response.status}: ${response.statusText}`);
             }
 
-            // Ensure we have JSON response before parsing
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 throw new Error('Invalid response format from server');
@@ -734,75 +742,17 @@ export default function Home() {
             };
             setFiles(updatedFiles);
             
-            // Update processing logs
             if (data.log) {
                 setProcessingLogs(prevLogs => [...prevLogs, data.log]);
             }
             
             if (data.status === 'completed' && data.completedData) {
-                // Update file status to success and set progress to 100%
-                updatedFiles[fileIndex] = {
-                    ...updatedFiles[fileIndex],
-                    status: 'success',
-                    progress: 100,
-                    analysis: data.completedData
-                };
-                setFiles(updatedFiles);
-                
-                // Update character analysis if present
-                if (data.completedData.characterAnalysis) {
-                    setCharacterMap(prevMap => ({
-                        ...prevMap,
-                        ...data.completedData.characterAnalysis
-                    }));
-                    setMainCharacters(Object.keys(data.completedData.characterAnalysis));
-                }
-                
-                // Update plot timeline if present
-                if (data.completedData.plotTimeline) {
-                    setPlotTimeline(prevTimeline => [...prevTimeline, ...(data.completedData.plotTimeline as any[])]);
-                }
-                
-                // Update world building elements if present
-                if (data.completedData.worldBuilding) {
-                    setWorldBuildingElements(prevElements => {
-                        const newElements = { ...prevElements };
-                        Object.entries(data.completedData.worldBuilding as Record<string, string[]>).forEach(([key, value]) => {
-                            newElements[key] = Array.from(new Set([...(newElements[key] || []), ...value]));
-                        });
-                        return newElements;
-                    });
-                }
-                
-                // Update main analysis states
-                if (data.completedData.analysis) setAnalysis(data.completedData.analysis);
-                if (data.completedData.summary) setSummary(data.completedData.summary);
-                if (data.completedData.prologue) setPrologue(data.completedData.prologue);
-                if (data.completedData.constructiveCriticism) {
-                    setConstructiveCriticism(data.completedData.constructiveCriticism);
-                }
-                
-                // Create downloadable CSV if present
-                if (data.completedData.csvContent) {
-                    const blob = new Blob([data.completedData.csvContent], { type: 'text/csv' });
-                    setDownloadLink(URL.createObjectURL(blob));
-                }
-                
-                // Add completion log
-                setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
-                setShowLoader(false);
+                handleCompletedAnalysis(data.completedData, fileIndex);
                 return;
             }
             
             if (data.status === 'error') {
-                updatedFiles[fileIndex] = {
-                    ...updatedFiles[fileIndex],
-                    status: 'error',
-                    error: data.error || 'An unknown error occurred'
-                };
-                setFiles(updatedFiles);
-                setShowLoader(false);
-                message.error(`Analysis failed: ${data.error || 'Unknown error'}`);
+                handleAnalysisError(data.error || 'Unknown error', fileIndex);
                 return;
             }
             
@@ -811,24 +761,77 @@ export default function Home() {
             
         } catch (error: any) {
             console.error('Error polling job status:', error);
-            
-            // Update file status to error
-            const updatedFiles = [...files];
-            updatedFiles[fileIndex] = {
-                ...updatedFiles[fileIndex],
-                status: 'error',
-                error: error.message || 'Failed to check job status'
-            };
-            setFiles(updatedFiles);
-            
-            // Show error message to user
-            message.error(`Analysis status check failed: ${error.message}`);
-            
-            // Hide loader
-            setShowLoader(false);
-            
-            // Add error to processing logs
-            setProcessingLogs(prev => [...prev, `Error: ${error.message}`]);
+            handleAnalysisError(error.message || 'Failed to check job status', fileIndex);
+        }
+    };
+
+    // Helper function to handle completed analysis
+    const handleCompletedAnalysis = (completedData: any, fileIndex: number) => {
+        const updatedFiles = [...files];
+        updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            status: 'success',
+            progress: 100,
+            analysis: completedData
+        };
+        setFiles(updatedFiles);
+        
+        if (completedData.characterAnalysis) {
+            setCharacterMap(prevMap => ({
+                ...prevMap,
+                ...completedData.characterAnalysis
+            }));
+            setMainCharacters(Object.keys(completedData.characterAnalysis));
+        }
+        
+        if (completedData.plotTimeline) {
+            setPlotTimeline(prevTimeline => [...prevTimeline, ...(completedData.plotTimeline as any[])]);
+        }
+        
+        if (completedData.worldBuilding) {
+            updateWorldBuildingElements(completedData.worldBuilding);
+        }
+        
+        updateAnalysisStates(completedData);
+        setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
+        setShowLoader(false);
+        messageApi.success('Analysis completed successfully!');
+    };
+
+    // Helper function to handle analysis errors
+    const handleAnalysisError = (errorMessage: string, fileIndex: number) => {
+        const updatedFiles = [...files];
+        updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            status: 'error',
+            error: errorMessage
+        };
+        setFiles(updatedFiles);
+        setShowLoader(false);
+        messageApi.error(`Analysis failed: ${errorMessage}`);
+        setProcessingLogs(prev => [...prev, `Error: ${errorMessage}`]);
+    };
+
+    // Helper function to update world building elements
+    const updateWorldBuildingElements = (worldBuilding: Record<string, string[]>) => {
+        setWorldBuildingElements(prevElements => {
+            const newElements = { ...prevElements };
+            Object.entries(worldBuilding).forEach(([key, value]) => {
+                newElements[key] = Array.from(new Set([...(newElements[key] || []), ...value]));
+            });
+            return newElements;
+        });
+    };
+
+    // Helper function to update analysis states
+    const updateAnalysisStates = (data: any) => {
+        if (data.analysis) setAnalysis(data.analysis);
+        if (data.summary) setSummary(data.summary);
+        if (data.prologue) setPrologue(data.prologue);
+        if (data.constructiveCriticism) setConstructiveCriticism(data.constructiveCriticism);
+        if (data.csvContent) {
+            const blob = new Blob([data.csvContent], { type: 'text/csv' });
+            setDownloadLink(URL.createObjectURL(blob));
         }
     };
 
@@ -1222,377 +1225,379 @@ export default function Home() {
     };
 
     return (
-        <ConfigProvider
-            theme={{
-                token: {
-                    colorBgBase: '#ffffff',
-                    colorTextBase: '#000000',
-                    colorBorder: '#f0f0f0',
-                    borderRadius: 8
-                }
-            }}
-        >
-            <Layout style={{ minHeight: '100vh', background: '#ffffff' }}>
-                <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
-                <div className="content-container" style={{ padding: '0 50px', marginTop: 64, background: '#ffffff' }}>
-                <Header style={{ 
-                    backgroundColor: '#1890ff', 
-                    color: '#fff', 
-                    textAlign: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 20px',
-                    height: 'auto',
-                    minHeight: '64px'
-                }}>
-                    <BookOutlined style={{ fontSize: 24, marginRight: 10, color: '#ffffff' }} />
-                    <h1 style={{ 
-                        margin: 0, 
-                        fontSize: '1.5rem',
-                        padding: '12px 0',
-                        color: '#ffffff'
+        <AntApp>
+            {contextHolder}
+            <ConfigProvider
+                theme={{
+                    token: {
+                        colorBgBase: '#ffffff',
+                        colorTextBase: '#000000',
+                        colorBorder: '#f0f0f0',
+                        borderRadius: 8
+                    }
+                }}
+            >
+                <Layout style={{ minHeight: '100vh', background: '#ffffff' }}>
+                    <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
+                    <div className="content-container" style={{ padding: '0 50px', marginTop: 64, background: '#ffffff' }}>
+                    <Header style={{ 
+                        backgroundColor: '#1890ff', 
+                        color: '#fff', 
+                        textAlign: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 20px',
+                        height: 'auto',
+                        minHeight: '64px'
                     }}>
-                        📖 eBook AI Analyzer
-                    </h1>
-                </Header>
-                
-                <Content style={{ padding: '20px', background: '#ffffff' }}>
-                    <Row justify="center" gutter={[16, 24]}>
-                        <Col xs={24} sm={22} md={18} lg={14} xl={12}>
-                            <Card 
-                                title={
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                                        <span style={{ color: '#000000' }}>Upload Your eBook</span>
-                                    </div>
-                                } 
-                                hoverable
-                                className="custom-card"
-                                style={{ 
-                                    marginBottom: '20px',
-                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                    borderRadius: '8px',
-                                    background: '#ffffff'
-                                }}
-                            >
-                                <Upload
-                                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                    multiple
-                                    maxCount={10}
-                                    showUploadList={{
-                                        showRemoveIcon: true,
-                                        removeIcon: <DeleteOutlined style={{ color: '#ff4d4f' }} />,
+                        <BookOutlined style={{ fontSize: 24, marginRight: 10, color: '#ffffff' }} />
+                        <h1 style={{ 
+                            margin: 0, 
+                            fontSize: '1.5rem',
+                            padding: '12px 0',
+                            color: '#ffffff'
+                        }}>
+                            📖 eBook AI Analyzer
+                        </h1>
+                    </Header>
+                    
+                    <Content style={{ padding: '20px', background: '#ffffff' }}>
+                        <Row justify="center" gutter={[16, 24]}>
+                            <Col xs={24} sm={22} md={18} lg={14} xl={12}>
+                                <Card 
+                                    title={
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                            <span style={{ color: '#000000' }}>Upload Your eBook</span>
+                                        </div>
+                                    } 
+                                    hoverable
+                                    className="custom-card"
+                                    style={{ 
+                                        marginBottom: '20px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '8px',
+                                        background: '#ffffff'
                                     }}
-                                    beforeUpload={(file) => {
-                                        const fileType = file.name.toLowerCase().split('.').pop();
-                                        const isValidType = fileType === 'pdf' || fileType === 'docx';
-                                        if (!isValidType) {
-                                            message.error('Please upload a PDF or DOCX file');
-                                        }
-                                        return false;
-                                    }}
-                                    onChange={handleFileChange}
                                 >
-                                    <Button 
-                                        icon={<UploadOutlined style={{ color: '#1890ff' }} />} 
-                                        type="primary"
-                                        ghost
-                                        className={!files.length ? "pulse" : ""}
-                                        style={{ 
-                                            width: '100%', 
-                                            height: '50px',
-                                            background: '#ffffff',
-                                            borderColor: '#1890ff',
-                                            color: '#1890ff'
+                                    <Upload
+                                        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        multiple
+                                        maxCount={10}
+                                        showUploadList={{
+                                            showRemoveIcon: true,
+                                            removeIcon: <DeleteOutlined style={{ color: '#ff4d4f' }} />,
                                         }}
+                                        beforeUpload={(file) => {
+                                            const fileType = file.name.toLowerCase().split('.').pop();
+                                            const isValidType = fileType === 'pdf' || fileType === 'docx';
+                                            if (!isValidType) {
+                                                message.error('Please upload a PDF or DOCX file');
+                                            }
+                                            return false;
+                                        }}
+                                        onChange={handleFileChange}
                                     >
-                                        Click to Upload Multiple PDFs (Max 10)
-                                    </Button>
-                                </Upload>
-                                
-                                {files.length > 0 && (
-                                    <div style={{ marginTop: '20px' }}>
-                                        {files.map((file, index) => (
-                                            <div
-                                                key={index}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    padding: '10px',
-                                                    marginBottom: '10px',
-                                                    background: '#f8f9fa',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid #e8e8e8'
-                                                }}
-                                            >
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ color: '#000000' }}>{file.file.name}</div>
-                                                    <Progress 
-                                                        percent={file.progress} 
-                                                        size="small" 
-                                                        status={
-                                                            file.status === 'error' ? 'exception' :
-                                                            file.status === 'success' ? 'success' :
-                                                            'active'
-                                                        }
-                                                    />
-                                                </div>
-                                                {file.status === 'error' && (
-                                                    <div style={{ color: '#ff4d4f', marginRight: '10px' }}>
-                                                        {file.error}
-                                                    </div>
-                                                )}
-                                                {file.status !== 'uploading' && (
-                                                    <Button
-                                                        type="text"
-                                                        danger
-                                                        onClick={() => removeFile(index)}
-                                                        style={{ marginLeft: '10px' }}
-                                                    >
-                                                        Remove
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        ))}
-                                        
-                                        <Button
-                                            onClick={handleUpload}
-                                            loading={uploading}
+                                        <Button 
+                                            icon={<UploadOutlined style={{ color: '#1890ff' }} />} 
                                             type="primary"
+                                            ghost
+                                            className={!files.length ? "pulse" : ""}
                                             style={{ 
                                                 width: '100%', 
-                                                marginTop: '15px',
                                                 height: '50px',
-                                                fontSize: '16px',
-                                                background: '#1890ff'
+                                                background: '#ffffff',
+                                                borderColor: '#1890ff',
+                                                color: '#1890ff'
                                             }}
-                                            disabled={files.length === 0 || uploading}
                                         >
-                                            {uploading ? 'Processing Files...' : 'Analyze All Files'}
+                                            Click to Upload Multiple PDFs (Max 10)
                                         </Button>
-                                    </div>
-                                )}
-                            </Card>
-
-                            {analysis.length === 0 && !loading && (
-                                <Alert 
-                                    message="Get started by uploading a PDF to analyze." 
-                                    description="Our AI will analyze your eBook and provide detailed insights on readability, content quality, structure, and more." 
-                                    type="info" 
-                                    showIcon 
-                                    style={{ 
-                                        marginTop: '30px',
-                                        background: '#ffffff',
-                                        border: '1px solid #91d5ff'
-                                    }}
-                                />
-                            )}
-                        </Col>
-                    </Row>
-
-                    {files.length > 0 && (
-                        <Row justify="center" style={{ marginTop: '20px' }}>
-                            <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                                <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: '20px' }}>
-                                    <Select
-                                        style={{ width: 300 }}
-                                        placeholder="Select a file to view"
-                                        onChange={(value) => setSelectedFileIndex(value)}
-                                        value={selectedFileIndex}
-                                    >
-                                        {files.map((file, index) => (
-                                            <Select.Option key={index} value={index}>
-                                                {file.file.name}
-                                            </Select.Option>
-                                        ))}
-                                    </Select>
+                                    </Upload>
                                     
-                                    {files.length > 1 && (
-                                        <Button
-                                            type="primary"
-                                            icon={<SwapOutlined />}
-                                            onClick={() => setShowComparison(!showComparison)}
-                                        >
-                                            {showComparison ? 'Hide Comparison' : 'Compare Files'}
-                                        </Button>
+                                    {files.length > 0 && (
+                                        <div style={{ marginTop: '20px' }}>
+                                            {files.map((file, index) => (
+                                                <div
+                                                    key={index}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        padding: '10px',
+                                                        marginBottom: '10px',
+                                                        background: '#f8f9fa',
+                                                        borderRadius: '4px',
+                                                        border: '1px solid #e8e8e8'
+                                                    }}
+                                                >
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ color: '#000000' }}>{file.file.name}</div>
+                                                        <Progress 
+                                                            percent={file.progress} 
+                                                            size="small" 
+                                                            status={
+                                                                file.status === 'error' ? 'exception' :
+                                                                file.status === 'success' ? 'success' :
+                                                                'active'
+                                                            }
+                                                        />
+                                                    </div>
+                                                    {file.status === 'error' && (
+                                                        <div style={{ color: '#ff4d4f', marginRight: '10px' }}>
+                                                            {file.error}
+                                                        </div>
+                                                    )}
+                                                    {file.status !== 'uploading' && (
+                                                        <Button
+                                                            type="text"
+                                                            danger
+                                                            onClick={() => removeFile(index)}
+                                                            style={{ marginLeft: '10px' }}
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            
+                                            <Button
+                                                onClick={handleUpload}
+                                                loading={uploading}
+                                                type="primary"
+                                                style={{ 
+                                                    width: '100%', 
+                                                    marginTop: '15px',
+                                                    height: '50px',
+                                                    fontSize: '16px',
+                                                    background: '#1890ff'
+                                                }}
+                                                disabled={files.length === 0 || uploading}
+                                            >
+                                                {uploading ? 'Processing Files...' : 'Analyze All Files'}
+                                            </Button>
+                                        </div>
                                     )}
-                                </Space>
-                                
-                                {showComparison && renderComparison()}
+                                </Card>
+
+                                {analysis.length === 0 && !loading && (
+                                    <Alert 
+                                        message="Get started by uploading a PDF to analyze." 
+                                        description="Our AI will analyze your eBook and provide detailed insights on readability, content quality, structure, and more." 
+                                        type="info" 
+                                        showIcon 
+                                        style={{ 
+                                            marginTop: '30px',
+                                            background: '#ffffff',
+                                            border: '1px solid #91d5ff'
+                                        }}
+                                    />
+                                )}
                             </Col>
                         </Row>
-                    )}
 
-                    {selectedFileIndex !== null && files[selectedFileIndex]?.analysis && (
-                        <>
-                            {/* Generate Report Buttons */}
+                        {files.length > 0 && (
                             <Row justify="center" style={{ marginTop: '20px' }}>
-                                <Col xs={24} sm={22} md={20} lg={18} xl={16} style={{ textAlign: 'center' }}>
-                                    <Button 
-                                        type="primary"
-                                        icon={<FilePdfOutlined />}
-                                        onClick={generateDocx}
-                                        loading={capturingPdf}
-                                        size="large"
-                                        className="pdf-button mobile-responsive-button"
-                                        style={{
-                                            height: 'auto',
-                                            padding: '10px 24px',
-                                            fontSize: '16px',
-                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                                        }}
-                                    >
-                                        Generate Analysis Report (DOCX)
-                                    </Button>
+                                <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                    <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: '20px' }}>
+                                        <Select
+                                            style={{ width: 300 }}
+                                            placeholder="Select a file to view"
+                                            onChange={(value) => setSelectedFileIndex(value)}
+                                            value={selectedFileIndex}
+                                        >
+                                            {files.map((file, index) => (
+                                                <Select.Option key={index} value={index}>
+                                                    {file.file.name}
+                                                </Select.Option>
+                                            ))}
+                                        </Select>
+                                        
+                                        {files.length > 1 && (
+                                            <Button
+                                                type="primary"
+                                                icon={<SwapOutlined />}
+                                                onClick={() => setShowComparison(!showComparison)}
+                                            >
+                                                {showComparison ? 'Hide Comparison' : 'Compare Files'}
+                                            </Button>
+                                        )}
+                                    </Space>
                                     
-                                    <Button 
-                                        type="default"
-                                        icon={<FilePdfOutlined />}
-                                        onClick={generateSimplePdf}
-                                        size="middle"
-                                        className="secondary-button mobile-responsive-button"
-                                        style={{
-                                            marginLeft: '10px',
-                                            height: 'auto',
-                                            padding: '8px 15px'
-                                        }}
-                                    >
-                                        Text-Only Report
-                                    </Button>
-                                    
-                                    {pdfSuccess && (
-                                        <Alert
-                                            message="DOCX Report Generated Successfully"
-                                            description="Your DOCX has been saved to your downloads folder."
-                                            type="success"
-                                            showIcon
-                                            closable
-                                            onClose={() => setPdfSuccess(false)}
-                                            className="pdf-success"
-                                            style={{ 
-                                                marginTop: '10px',
-                                                width: '100%',
-                                                maxWidth: '600px',
-                                                margin: '10px auto'
-                                            }}
-                                        />
-                                    )}
+                                    {showComparison && renderComparison()}
                                 </Col>
                             </Row>
+                        )}
 
-                            {/* Editorial Feedback Card */}
-                            {constructiveCriticism && (
-                                <Row justify="center" gutter={[0, 24]}>
-                                    <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                                        <Card 
-                                            title={
-                                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                        <EditOutlined style={{ marginRight: 8, color: '#fa8c16', fontSize: '20px' }} />
-                                                        <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#fa8c16' }}>Editorial Assessment</span>
-                                                </div>
-                                            }
-                                            className="custom-card editorial-card fade-in"
-                                            style={{ 
-                                                marginTop: '20px',
-                                                    boxShadow: '0 4px 20px rgba(250, 140, 22, 0.15)',
-                borderRadius: '12px',
-                                                    borderTop: '4px solid #fa8c16',
-                                                    background: '#ffffff'
+                        {selectedFileIndex !== null && files[selectedFileIndex]?.analysis && (
+                            <>
+                                {/* Generate Report Buttons */}
+                                <Row justify="center" style={{ marginTop: '20px' }}>
+                                    <Col xs={24} sm={22} md={20} lg={18} xl={16} style={{ textAlign: 'center' }}>
+                                        <Button 
+                                            type="primary"
+                                            icon={<FilePdfOutlined />}
+                                            onClick={generateDocx}
+                                            loading={capturingPdf}
+                                            size="large"
+                                            className="pdf-button mobile-responsive-button"
+                                            style={{
+                                                height: 'auto',
+                                                padding: '10px 24px',
+                                                fontSize: '16px',
+                                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                                             }}
-                                            variant="outlined"
-                                            hoverable
                                         >
-                                            <div ref={editorialContentRef}>
-                                                <div style={{
-                                                        padding: '15px 20px',
-                                                        background: 'rgba(250, 140, 22, 0.05)',
-                                                    borderRadius: '8px',
-                                                    marginBottom: '20px',
-                                                        border: '1px solid rgba(250, 140, 22, 0.2)'
-                                                    }}>
-                                                        <Typography.Text type="secondary" style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
-                                                            Professional Editorial Feedback
-                                                        </Typography.Text>
-                                                        <Typography.Text style={{ fontSize: '16px', display: 'block', color: '#333' }}>
-                                                            Curated recommendations to enhance your book's quality and impact.
-                                                        </Typography.Text>
+                                            Generate Analysis Report (DOCX)
+                                        </Button>
+                                        
+                                        <Button 
+                                            type="default"
+                                            icon={<FilePdfOutlined />}
+                                            onClick={generateSimplePdf}
+                                            size="middle"
+                                            className="secondary-button mobile-responsive-button"
+                                            style={{
+                                                marginLeft: '10px',
+                                                height: 'auto',
+                                                padding: '8px 15px'
+                                            }}
+                                        >
+                                            Text-Only Report
+                                        </Button>
+                                        
+                                        {pdfSuccess && (
+                                            <Alert
+                                                message="DOCX Report Generated Successfully"
+                                                description="Your DOCX has been saved to your downloads folder."
+                                                type="success"
+                                                showIcon
+                                                closable
+                                                onClose={() => setPdfSuccess(false)}
+                                                className="pdf-success"
+                                                style={{ 
+                                                    marginTop: '10px',
+                                                    width: '100%',
+                                                    maxWidth: '600px',
+                                                    margin: '10px auto'
+                                                }}
+                                            />
+                                        )}
+                                    </Col>
+                                </Row>
+
+                                {/* Editorial Feedback Card */}
+                                {constructiveCriticism && (
+                                    <Row justify="center" gutter={[0, 24]}>
+                                        <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                            <Card 
+                                                title={
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                            <EditOutlined style={{ marginRight: 8, color: '#fa8c16', fontSize: '20px' }} />
+                                                            <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#fa8c16' }}>Editorial Assessment</span>
                                                     </div>
-                                                    
-                                                    {/* Key Recommendation Highlight */}
+                                                }
+                                                className="custom-card editorial-card fade-in"
+                                                style={{ 
+                                                    marginTop: '20px',
+                                                        boxShadow: '0 4px 20px rgba(250, 140, 22, 0.15)',
+                borderRadius: '12px',
+                                                        borderTop: '4px solid #fa8c16',
+                                                        background: '#ffffff'
+                                                }}
+                                                variant="outlined"
+                                                hoverable
+                                            >
+                                                <div ref={editorialContentRef}>
                                                     <div style={{
-                                                        padding: '20px',
-                                                        background: 'linear-gradient(to right, rgba(250, 140, 22, 0.1), rgba(250, 140, 22, 0.02))',
-                                                        borderRadius: '12px',
-                                                        marginBottom: '25px',
-                                                        border: '1px dashed #fa8c16',
-                                                        position: 'relative',
-                                                        overflow: 'hidden'
-                                                    }}>
-                                                        <div style={{ 
-                                                            position: 'absolute', 
-                                                            top: 0, 
-                                                            left: 0, 
-                                                            width: '5px', 
-                                                            height: '100%', 
-                                                            background: '#fa8c16' 
-                                                        }}></div>
-                                                        <Title level={5} style={{ color: '#fa8c16', marginTop: 0, position: 'relative' }}>
-                                                            TOP PRIORITY
+                                                            padding: '15px 20px',
+                                                            background: 'rgba(250, 140, 22, 0.05)',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '20px',
+                                                            border: '1px solid rgba(250, 140, 22, 0.2)'
+                                                        }}>
+                                                            <Typography.Text type="secondary" style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
+                                                                Professional Editorial Feedback
+                                                            </Typography.Text>
+                                                            <Typography.Text style={{ fontSize: '16px', display: 'block', color: '#333' }}>
+                                                                Curated recommendations to enhance your book's quality and impact.
+                                                            </Typography.Text>
+                                                        </div>
+                                                        
+                                                        {/* Key Recommendation Highlight */}
+                                                        <div style={{
+                                                            padding: '20px',
+                                                            background: 'linear-gradient(to right, rgba(250, 140, 22, 0.1), rgba(250, 140, 22, 0.02))',
+                                                            borderRadius: '12px',
+                                                            marginBottom: '25px',
+                                                            border: '1px dashed #fa8c16',
+                                                            position: 'relative',
+                                                            overflow: 'hidden'
+                                                        }}>
                                                             <div style={{ 
                                                                 position: 'absolute', 
-                                                                top: '50%', 
-                                                                right: '-5px', 
-                                                                width: '30px', 
-                                                                height: '30px', 
-                                                                transform: 'translateY(-50%)', 
-                                                                opacity: 0.2 
+                                                                top: 0, 
+                                                                left: 0, 
+                                                                width: '5px', 
+                                                                height: '100%', 
+                                                                background: '#fa8c16' 
+                                                            }}></div>
+                                                            <Title level={5} style={{ color: '#fa8c16', marginTop: 0, position: 'relative' }}>
+                                                                TOP PRIORITY
+                                                                <div style={{ 
+                                                                    position: 'absolute', 
+                                                                    top: '50%', 
+                                                                    right: '-5px', 
+                                                                    width: '30px', 
+                                                                    height: '30px', 
+                                                                    transform: 'translateY(-50%)', 
+                                                                    opacity: 0.2 
+                                                                }}>
+                                                                    <EditOutlined style={{ fontSize: '30px', color: '#fa8c16' }} />
+                                                                </div>
+                                                            </Title>
+                                                            
+                                                            <Title level={5} style={{ 
+                                                                marginTop: '15px', 
+                                                                marginBottom: '10px', 
+                                                                fontWeight: '500',
+                                                                color: '#555',
+                                                                fontSize: '15px'
                                                             }}>
-                                                                <EditOutlined style={{ fontSize: '30px', color: '#fa8c16' }} />
-                                                            </div>
-                                                        </Title>
-                                                        
-                                                        <Title level={5} style={{ 
-                                                            marginTop: '15px', 
-                                                            marginBottom: '10px', 
-                                                            fontWeight: '500',
-                                                            color: '#555',
-                                                            fontSize: '15px'
-                                                        }}>
-                                                            EDITOR'S KEY RECOMMENDATION
-                                                        </Title>
-                                                        
-                                                        <Paragraph style={{ 
-                                                            fontWeight: 400, 
-                                                            fontSize: '15px', 
-                                                            lineHeight: '1.6', 
-                                                            color: '#333'
-                                                        }}>
-                                                            {constructiveCriticism.split('\n')[0].split(/(\*\*.*?\*\*)/).map((part, idx) => {
-                                                                // Check if this part is a heading encased in asterisks
-                                                                if (part.startsWith('**') && part.endsWith('**')) {
-                                                                    const headingText = part.substring(2, part.length - 2);
+                                                                EDITOR'S KEY RECOMMENDATION
+                                                            </Title>
+                                                            
+                                                            <Paragraph style={{ 
+                                                                fontWeight: 400, 
+                                                                fontSize: '15px', 
+                                                                lineHeight: '1.6', 
+                                                                color: '#333'
+                                                            }}>
+                                                                {constructiveCriticism.split('\n')[0].split(/(\*\*.*?\*\*)/).map((part, idx) => {
+                                                                    // Check if this part is a heading encased in asterisks
+                                                                    if (part.startsWith('**') && part.endsWith('**')) {
+                                                                        const headingText = part.substring(2, part.length - 2);
+                                                                        return (
+                                                                            <span 
+                                                                                key={idx}
+                                                                                style={{
+                                                                                    fontWeight: 'bold',
+                                                                                    color: '#fa8c16',
+                                                                                    padding: '0 2px'
+                                                                                }}
+                                                                            >
+                                                                                {headingText}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    
+                                                                    // Regular text
                                                                     return (
-                                                                        <span 
-                                                                            key={idx}
-                                                                            style={{
-                                                                                fontWeight: 'bold',
-                                                                                color: '#fa8c16',
-                                                                                padding: '0 2px'
-                                                                            }}
-                                                                        >
-                                                                            {headingText}
+                                                                        <span key={idx}>
+                                                                            {part}
                                                                         </span>
                                                                     );
-                                                                }
-                                                                
-                                                                // Regular text
-                                                                return (
-                                                                    <span key={idx}>
-                                                                        {part}
-                                                                    </span>
-                                                                );
-                                                            })}
+                                                                })}
                                                     </Paragraph>
                                                 </div>
                                                     
@@ -2729,5 +2734,6 @@ export default function Home() {
             </div>
         </Layout>
     </ConfigProvider>
+    </AntApp>
     );
 }
