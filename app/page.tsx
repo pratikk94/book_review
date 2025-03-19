@@ -709,11 +709,11 @@ export default function Home() {
                 padding: '0 20px'
             }}>
                 <BookOutlined style={{ fontSize: 24, marginRight: 10 }} />
-                <h1 style={{ margin: 0 }}>📖 eBook AI Analyzer</h1>
+                <h1 style={{ margin: 0, fontSize: '1.5rem' }}>📖 eBook AI Analyzer</h1>
             </Header>
             
             <Content style={{ padding: '20px' }}>
-                <Row justify="center" gutter={[0, 24]}>
+                <Row justify="center" gutter={[16, 24]}>
                     <Col xs={24} sm={20} md={16} lg={12} xl={10}>
                         <Card 
                             title={
@@ -722,7 +722,6 @@ export default function Home() {
                                     <span>Upload Your eBook</span>
                                 </div>
                             } 
-                            variant="outlined"
                             hoverable
                             className="custom-card"
                             style={{ 
@@ -776,45 +775,7 @@ export default function Home() {
                                 <div style={{ marginTop: '20px', textAlign: 'center' }}>
                                     <Progress percent={progress} status="active" />
                                     <p style={{ marginTop: '10px', color: '#1890ff' }}>{analysisStage}</p>
-                                    
-                                    {/* Processing Logs Section */}
-                                    <div style={{ 
-                                        marginTop: '15px',
-                                        padding: '10px',
-                                        backgroundColor: '#f5f5f5',
-                                        borderRadius: '4px',
-                                        maxHeight: '200px',
-                                        overflowY: 'auto',
-                                        textAlign: 'left'
-                                    }}>
-                                        <h4 style={{ marginBottom: '8px', color: '#1890ff' }}>Processing Logs:</h4>
-                                        {processingLogs.map((log, index) => (
-                                            <div 
-                                                key={index}
-                                                style={{ 
-                                                    padding: '4px 0',
-                                                    fontSize: '14px',
-                                                    color: '#666',
-                                                    borderBottom: index < processingLogs.length - 1 ? '1px solid #eee' : 'none'
-                                                }}
-                                            >
-                                                {log}
-                                            </div>
-                                        ))}
-                                    </div>
                                 </div>
-                            )}
-                            
-                            <Button 
-                                onClick={testApi}
-                                type="link"
-                                style={{ width: '100%', marginTop: '10px' }}
-                            >
-                                Test API Connection
-                            </Button>
-                            
-                            {apiTest && (
-                                <Alert message={apiTest} type="info" showIcon style={{ marginTop: '10px' }} />
                             )}
                         </Card>
                     </Col>
