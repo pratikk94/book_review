@@ -1083,6 +1083,7 @@ export default function Home() {
     const generateDocx = async () => {
         try {
             setCapturingPdf(true);
+            messageApi.loading('Generating Word document...');
             
             // Create a new instance of Document
             const doc = new DocxDocument({
@@ -1246,11 +1247,10 @@ export default function Home() {
             const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
             saveAs(blob, 'ebook-analysis.docx');
             
-            setPdfSuccess(true);
-            setTimeout(() => setPdfSuccess(false), 3000);
+            messageApi.success('Word document generated successfully!');
         } catch (error) {
             console.error('Error generating DOCX:', error);
-            message.error('Failed to generate DOCX report');
+            messageApi.error('Failed to generate DOCX report');
         } finally {
             setCapturingPdf(false);
         }
@@ -1698,7 +1698,7 @@ export default function Home() {
     const generatePdfReport = async () => {
         try {
             setCapturingPdf(true);
-            messageApi.loading('Generating PDF report...');
+            messageApi.loading('Generating high-quality PDF report...');
             
             // Get the analysis content
             const analysisElement = document.querySelector('.content-container') as HTMLElement;
@@ -1718,53 +1718,91 @@ export default function Home() {
             const pageHeight = pdf.internal.pageSize.getHeight();
             
             // Add cover page
-            pdf.setFontSize(24);
+            pdf.setFontSize(28);
             pdf.setTextColor(24, 144, 255); // Blue color
-            pdf.text('eBook AI Analysis Report', pageWidth / 2, 80, { align: 'center' });
+            pdf.text('eBook AI Analysis Report', pageWidth / 2, 100, { align: 'center' });
             
             // Add timestamp
-            pdf.setFontSize(12);
-            pdf.setTextColor(0, 0, 0); // Black
-            pdf.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, 120, { align: 'center' });
+            pdf.setFontSize(14);
+            pdf.setTextColor(80, 80, 80); // Dark gray
+            pdf.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, 140, { align: 'center' });
             
-            // Get current content as image
+            // Add logo/graphic
+            pdf.setFontSize(60);
+            pdf.setTextColor(200, 200, 200); // Light gray
+            pdf.text('📖', pageWidth / 2, 220, { align: 'center' });
+            
+            // Add quality note
+            pdf.setFontSize(12);
+            pdf.setTextColor(100, 100, 100);
+            pdf.text('High-Quality Analysis Report', pageWidth / 2, pageHeight - 60, { align: 'center' });
+            
+            // Render with maximum quality settings
             const canvas = await html2canvas(analysisElement, {
-                scale: 2,
+                scale: 3, // Higher scale for better quality
                 useCORS: true,
                 allowTaint: true,
-                scrollY: -window.scrollY
+                scrollY: -window.scrollY,
+                logging: false,
+                backgroundColor: '#ffffff',
+                imageTimeout: 0, // No timeout
+                onclone: (clonedDoc) => {
+                    // Improve styling in the cloned document for better PDF rendering
+                    const style = clonedDoc.createElement('style');
+                    style.innerHTML = `
+                        * { 
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                            color: #000 !important;
+                        }
+                        h1, h2, h3, h4, h5, h6 { font-weight: bold !important; }
+                        .citation-text { 
+                            background: #f6f6f6 !important;
+                            border-left: 3px solid #333 !important;
+                        }
+                    `;
+                    clonedDoc.head.appendChild(style);
+                }
             });
             
-            // Calculate how many pages needed
+            // Calculate how many pages needed with higher resolution
             const imgHeight = canvas.height;
             const imgWidth = canvas.width;
             
-            // Content scaling to fit page width
-            const contentWidth = pageWidth - 40; // 20pt margins on both sides
+            // Content scaling to fit page width with better margins
+            const contentWidth = pageWidth - 60; // 30pt margins on both sides
             const scaleFactor = contentWidth / imgWidth;
             const contentHeight = imgHeight * scaleFactor;
             
             // How many pages this will take
-            const totalPages = Math.ceil(contentHeight / (pageHeight - 120)); // 120pt for headers/margins
+            const totalPages = Math.ceil(contentHeight / (pageHeight - 140)); // 140pt for headers/margins
             
-            // Calculate content segments
+            // Calculate content segments with better precision
             for (let i = 0; i < totalPages; i++) {
                 if (i > 0) {
                     pdf.addPage();
                 }
                 
-                // Source area height
-                const sourceHeight = (pageHeight - 120) / scaleFactor;
+                // Source area height with improved calculation
+                const sourceHeight = Math.ceil((pageHeight - 140) / scaleFactor);
                 const sourceY = i * sourceHeight;
                 
-                // Create temporary canvas for this segment
+                // Create temporary canvas for this segment with higher quality
                 const tempCanvas = document.createElement('canvas');
+                const ctx = tempCanvas.getContext('2d', { alpha: false });
+                
                 tempCanvas.width = imgWidth;
                 tempCanvas.height = Math.min(sourceHeight, imgHeight - sourceY);
                 
-                // Draw portion to temp canvas
-                const ctx = tempCanvas.getContext('2d');
                 if (ctx) {
+                    // Improve rendering quality with better settings
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    
+                    // Clear background
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    // Draw portion to temp canvas
                     ctx.drawImage(
                         canvas,
                         0, sourceY,
@@ -1773,27 +1811,126 @@ export default function Home() {
                         imgWidth, tempCanvas.height
                     );
                     
-                    // Add to PDF
-                    const imgData = tempCanvas.toDataURL('image/jpeg', 0.9);
+                    // Add to PDF with better compression
+                    const imgData = tempCanvas.toDataURL('image/jpeg', 1.0); // Maximum quality
                     pdf.addImage(
                         imgData, 
                         'JPEG', 
-                        20, 40, // Margins
+                        30, 40, // Margins
                         contentWidth, tempCanvas.height * scaleFactor
                     );
                     
-                    // Add page number
+                    // Add header
                     pdf.setFontSize(10);
+                    pdf.setTextColor(80, 80, 80);
+                    pdf.text('eBook AI Analysis', 30, 20);
+                    
+                    // Add page number with better styling
+                    pdf.setFontSize(10);
+                    pdf.setTextColor(80, 80, 80);
                     pdf.text(`Page ${i+1} of ${totalPages}`, pageWidth - 40, pageHeight - 20, { align: 'right' });
                 }
             }
             
-            // Save the PDF
-            pdf.save('complete-ebook-analysis.pdf');
-            messageApi.success('PDF report generated successfully!');
+            // Save the PDF with a better filename
+            pdf.save('ebook-analysis-professional-report.pdf');
+            messageApi.success('High-quality PDF report generated successfully!');
         } catch (error) {
             console.error('Error generating PDF report:', error);
             messageApi.error('Failed to generate PDF report');
+        } finally {
+            setCapturingPdf(false);
+        }
+    };
+
+    // Function to generate a simple DOCX report with just the analysis data
+    const generateSimpleDocx = async () => {
+        try {
+            setCapturingPdf(true);
+            messageApi.loading('Generating simple Word document...');
+            
+            // Create a new instance of Document
+            const doc = new DocxDocument({
+                sections: [{
+                    properties: {},
+                    children: [
+                        // Title
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "eBook Analysis Report",
+                                    bold: true,
+                                    size: 36
+                                })
+                            ],
+                            spacing: { after: 300 }
+                        }),
+                        
+                        // Summary
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Book Summary",
+                                    bold: true,
+                                    size: 28
+                                })
+                            ],
+                            spacing: { before: 200, after: 100 }
+                        }),
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: summary || "No summary available",
+                                    size: 24
+                                })
+                            ],
+                            spacing: { after: 200 }
+                        }),
+                        
+                        // Analysis Items
+                        ...analysis.map(item => [
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: item.Parameter,
+                                        bold: true,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { before: 200, after: 50 }
+                            }),
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: `Score: ${item.Score}/5`,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { after: 50 }
+                            }),
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: item.Justification,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { after: 200 }
+                            })
+                        ]).flat()
+                    ]
+                }]
+            });
+
+            // Generate and save the document
+            const buffer = await Packer.toBuffer(doc);
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            saveAs(blob, 'simple-ebook-analysis.docx');
+            
+            messageApi.success('Simple Word document generated successfully!');
+        } catch (error) {
+            console.error('Error generating DOCX:', error);
+            messageApi.error('Failed to generate DOCX report');
         } finally {
             setCapturingPdf(false);
         }
@@ -1816,46 +1953,28 @@ export default function Home() {
                     <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
                     <div className="content-container" style={{ padding: '0 50px', marginTop: 64, background: '#ffffff' }}>
                     
-                    {/* Add floating buttons for screenshots and PDF */}
+                    {/* Only keep the green DOCX button with simplified functionality */}
                     <div style={{
                         position: 'fixed',
                         bottom: 20,
                         right: 20,
-                        zIndex: 1000,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px'
+                        zIndex: 1000
                     }}>
                         <Button
                             type="primary"
                             shape="circle"
                             size="large"
-                            icon={<FileImageOutlined />}
-                            onClick={captureFullPageScreenshot}
-                            loading={takingScreenshot}
                             style={{
-                                width: 50,
-                                height: 50,
-                                boxShadow: '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)'
-                            }}
-                            title="Take Full Page Screenshots (A4 sized)"
-                        />
-                        
-                        <Button
-                            type="primary"
-                            shape="circle"
-                            size="large"
-                            style={{
-                                width: 50,
-                                height: 50,
+                                width: 60,
+                                height: 60,
                                 background: '#52c41a',
                                 borderColor: '#52c41a',
-                                boxShadow: '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)'
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                             }}
-                            icon={<FilePdfOutlined />}
-                            onClick={generatePdfReport}
+                            icon={<FileTextOutlined style={{ fontSize: '24px' }}/>}
+                            onClick={generateSimpleDocx}
                             loading={capturingPdf}
-                            title="Generate Complete PDF Report"
+                            title="Generate Word Document Report"
                         />
                     </div>
                     
@@ -3235,29 +3354,21 @@ export default function Home() {
                                             </Card>
                                         </div>
 
-                                        {downloadLink && (
-                                            <a 
-                                                href={downloadLink}
-                                                download="analysis.csv"
-                                                className="ant-btn ant-btn-primary"
-                                                style={{ marginRight: '10px' }}
-                                            >
-                                                Download CSV
-                                            </a>
-                                        )}
-                                        
                                         <Button 
                                             type="primary"
-                                            icon={<FilePdfOutlined />}
-                                            onClick={generateEnhancedPdf}
+                                            icon={<FileTextOutlined />}
+                                            onClick={generateSimpleDocx}
                                             loading={capturingPdf}
                                             className="pdf-button"
                                             style={{ 
-                                                marginTop: '15px', 
-                                                marginLeft: downloadLink ? '10px' : '0',
+                                                marginTop: '15px',
+                                                background: '#52c41a', 
+                                                borderColor: '#52c41a',
+                                                padding: '8px 16px',
+                                                height: 'auto'
                                             }}
                                         >
-                                            {capturingPdf ? 'Generating...' : 'Save Enhanced PDF'}
+                                            Generate Word Document
                                         </Button>
                                     </div>
                                 </Card>
