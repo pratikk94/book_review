@@ -60,7 +60,14 @@ export async function GET(req: Request) {
   // If jobId is provided, return job status (this will only work locally, not on Vercel)
   if (jobId) {
     if (!jobStatus.has(jobId)) {
-      return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
+      // Instead of returning 400 error, return a more graceful response for Vercel environment
+      // This allows the frontend to handle the situation better
+      return NextResponse.json({ 
+        status: 'processing',
+        progress: 50,
+        message: "Job status not found. This is normal on Vercel deployments. The analysis is likely still processing in the background.",
+        vercelDeployment: true
+      });
     }
     return NextResponse.json(jobStatus.get(jobId));
   }

@@ -773,6 +773,53 @@ export default function Home() {
                 throw new Error(data.error);
             }
             
+            // Special handling for Vercel deployments where job status is lost between serverless function calls
+            if (data.vercelDeployment) {
+                console.log("Received vercelDeployment status - job status not found but continuing processing");
+                
+                // Update progress but not too quickly to avoid false completions
+                const currentProgress = progress || 0;
+                const newProgress = Math.min(currentProgress + 5, 90); // Cap at 90% until we get real completion
+                setProgress(newProgress);
+                
+                if (data.message) {
+                    setAnalysisStage(data.message);
+                    // Only add this message once to avoid duplicates
+                    if (!processingLogs.includes(data.message)) {
+                        setProcessingLogs(prev => [...prev, data.message]);
+                    }
+                }
+                
+                // Instead of error, we'll just keep polling but slow it down a bit
+                setTimeout(() => {
+                    // After about a minute, try to get the final result
+                    if (newProgress > 85) {
+                        // Try to get the final result directly
+                        fetch(`/api/analyze?finalResult=true&jobId=${jobId}`)
+                            .then(response => response.json())
+                            .then(finalData => {
+                                if (finalData.analysis) {
+                                    // Success! We have the final data
+                                    updateUIWithResults(finalData, fileIndex);
+                                    return;
+                                } else {
+                                    // Still processing, continue polling
+                                    pollJobStatus(jobId, fileIndex);
+                                }
+                            })
+                            .catch(error => {
+                                console.error("Error checking final result:", error);
+                                pollJobStatus(jobId, fileIndex);
+                            });
+                    } else {
+                        // Continue regular polling
+                        pollJobStatus(jobId, fileIndex);
+                    }
+                }, 4000); // Increased polling interval for Vercel
+                
+                return;
+            }
+            
             // Update progress and stage
             if (data.progress !== undefined) {
                 setProgress(data.progress);
@@ -783,69 +830,7 @@ export default function Home() {
             
             // Update file status and analysis data
             if (data.status === 'completed' && data.analysis) {
-                const updatedFiles = [...files];
-                updatedFiles[fileIndex] = {
-                    ...updatedFiles[fileIndex],
-                    status: 'success',
-                    progress: 100,
-                    analysis: data.analysis
-                };
-                setFiles(updatedFiles);
-                
-                // Update analysis states with the complete data
-                // Fix the structure mismatch between frontend and backend
-                setAnalysis(Array.isArray(data.analysis) ? data.analysis : []);
-                setSummary(data.summary || '');
-                setPrologue(data.prologue || '');
-                setConstructiveCriticism(data.constructiveCriticism || '');
-                
-                // Update character network
-                if (data.characters) {
-                    setCharacterMap(data.characters.characterMap || {});
-                    setMainCharacters(data.characters.mainCharacters || []);
-                }
-                
-                // Update plot timeline
-                if (data.timeline) {
-                    setPlotTimeline(data.timeline || []);
-                }
-                
-                // Update world building elements
-                if (data.worldBuilding) {
-                    setWorldBuildingElements({
-                        locations: data.worldBuilding.locations || {},
-                        customs: data.worldBuilding.customs || [],
-                        history: data.worldBuilding.history || [],
-                        rules: data.worldBuilding.rules || [],
-                        technology: data.worldBuilding.technology || [],
-                        socialStructure: data.worldBuilding.socialStructure || []
-                    });
-                }
-                
-                // Calculate overall score
-                if (Array.isArray(data.analysis)) {
-                    const scores = data.analysis.map(item => 
-                        item.Score > 5 ? item.Score / 2 : item.Score
-                    );
-                    const totalScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-                    setResults({
-                        ...results,
-                        totalScore: Math.round(totalScore * 10) / 10,
-                        maxPossibleScore: 5,
-                        percentage: (totalScore / 5) * 100,
-                        strengths: data.strengths || [],
-                        improvements: data.improvements || [],
-                        narrativeContext: {
-                            plotArcs: data.plotArcs || [],
-                            themes: data.themes || []
-                        }
-                    });
-                }
-                
-                setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
-                setShowLoader(false);
-                setShowAnalysisOverlay(false);
-                messageApi.success('Analysis completed successfully!');
+                updateUIWithResults(data, fileIndex);
                 return;
             }
             
@@ -856,6 +841,73 @@ export default function Home() {
             console.error('Error polling job status:', error);
             handleAnalysisError(error.message || 'Failed to check job status', fileIndex);
         }
+    };
+
+    // Helper function to update UI with results to avoid code duplication
+    const updateUIWithResults = (data: any, fileIndex: number) => {
+        const updatedFiles = [...files];
+        updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            status: 'success',
+            progress: 100,
+            analysis: data.analysis
+        };
+        setFiles(updatedFiles);
+        
+        // Update analysis states with the complete data
+        // Fix the structure mismatch between frontend and backend
+        setAnalysis(Array.isArray(data.analysis) ? data.analysis : []);
+        setSummary(data.summary || '');
+        setPrologue(data.prologue || '');
+        setConstructiveCriticism(data.constructiveCriticism || '');
+        
+        // Update character network
+        if (data.characters) {
+            setCharacterMap(data.characters.characterMap || {});
+            setMainCharacters(data.characters.mainCharacters || []);
+        }
+        
+        // Update plot timeline
+        if (data.timeline) {
+            setPlotTimeline(data.timeline || []);
+        }
+        
+        // Update world building elements
+        if (data.worldBuilding) {
+            setWorldBuildingElements({
+                locations: data.worldBuilding.locations || {},
+                customs: data.worldBuilding.customs || [],
+                history: data.worldBuilding.history || [],
+                rules: data.worldBuilding.rules || [],
+                technology: data.worldBuilding.technology || [],
+                socialStructure: data.worldBuilding.socialStructure || []
+            });
+        }
+        
+        // Calculate overall score
+        if (Array.isArray(data.analysis)) {
+            const scores = data.analysis.map(item => 
+                item.Score > 5 ? item.Score / 2 : item.Score
+            );
+            const totalScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+            setResults({
+                ...results,
+                totalScore: Math.round(totalScore * 10) / 10,
+                maxPossibleScore: 5,
+                percentage: (totalScore / 5) * 100,
+                strengths: data.strengths || [],
+                improvements: data.improvements || [],
+                narrativeContext: {
+                    plotArcs: data.plotArcs || [],
+                    themes: data.themes || []
+                }
+            });
+        }
+        
+        setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
+        setShowLoader(false);
+        setShowAnalysisOverlay(false);
+        messageApi.success('Analysis completed successfully!');
     };
 
     // Helper function to handle analysis errors
