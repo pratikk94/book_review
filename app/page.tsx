@@ -683,15 +683,25 @@ export default function Home() {
                             'x-context-analysis': 'deep',
                             'x-world-building': 'enabled',
                             'x-plot-analysis': 'enabled',
-                            'x-theme-analysis': 'enabled'
+                            'x-theme-analysis': 'enabled',
+                            'x-exclude-authors': 'true',
+                            'x-character-filter': 'strict'
                         }
                     });
 
                     if (!response.ok) {
-                        throw new Error(`Upload failed for ${fileStatus.file.name}: ${response.statusText}`);
+                        const errorData = await response.json().catch(() => ({
+                            error: `Server returned status ${response.status}`
+                        }));
+                        
+                        throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
                     }
 
                     const data = await response.json();
+                    
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
                     
                     if (data.jobId) {
                         setFiles(prev => prev.map((f, i) => 
@@ -749,10 +759,19 @@ export default function Home() {
             });
             
             if (!response.ok) {
-                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                const errorData = await response.json().catch(() => ({
+                    error: `Server returned status ${response.status}: ${response.statusText}`
+                }));
+                
+                throw new Error(errorData.error || `Server error: ${response.statusText}`);
             }
 
             const data = await response.json();
+            
+            // Check for error in the response data
+            if (data.error) {
+                throw new Error(data.error);
+            }
             
             // Update progress and stage
             if (data.progress !== undefined) {
@@ -774,37 +793,38 @@ export default function Home() {
                 setFiles(updatedFiles);
                 
                 // Update analysis states with the complete data
-                setAnalysis(data.analysis.parameters || []);
-                setSummary(data.analysis.summary || '');
-                setPrologue(data.analysis.prologue || '');
-                setConstructiveCriticism(data.analysis.editorial || '');
+                // Fix the structure mismatch between frontend and backend
+                setAnalysis(Array.isArray(data.analysis) ? data.analysis : []);
+                setSummary(data.summary || '');
+                setPrologue(data.prologue || '');
+                setConstructiveCriticism(data.constructiveCriticism || '');
                 
                 // Update character network
-                if (data.analysis.characters) {
-                    setCharacterMap(data.analysis.characters.characterMap || {});
-                    setMainCharacters(data.analysis.characters.mainCharacters || []);
+                if (data.characters) {
+                    setCharacterMap(data.characters.characterMap || {});
+                    setMainCharacters(data.characters.mainCharacters || []);
                 }
                 
                 // Update plot timeline
-                if (data.analysis.timeline) {
-                    setPlotTimeline(data.analysis.timeline || []);
+                if (data.timeline) {
+                    setPlotTimeline(data.timeline || []);
                 }
                 
                 // Update world building elements
-                if (data.analysis.worldBuilding) {
+                if (data.worldBuilding) {
                     setWorldBuildingElements({
-                        locations: data.analysis.worldBuilding.locations || {},
-                        customs: data.analysis.worldBuilding.customs || [],
-                        history: data.analysis.worldBuilding.history || [],
-                        rules: data.analysis.worldBuilding.rules || [],
-                        technology: data.analysis.worldBuilding.technology || [],
-                        socialStructure: data.analysis.worldBuilding.socialStructure || []
+                        locations: data.worldBuilding.locations || {},
+                        customs: data.worldBuilding.customs || [],
+                        history: data.worldBuilding.history || [],
+                        rules: data.worldBuilding.rules || [],
+                        technology: data.worldBuilding.technology || [],
+                        socialStructure: data.worldBuilding.socialStructure || []
                     });
                 }
                 
                 // Calculate overall score
-                if (Array.isArray(data.analysis.parameters)) {
-                    const scores = data.analysis.parameters.map(item => 
+                if (Array.isArray(data.analysis)) {
+                    const scores = data.analysis.map(item => 
                         item.Score > 5 ? item.Score / 2 : item.Score
                     );
                     const totalScore = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -813,11 +833,11 @@ export default function Home() {
                         totalScore: Math.round(totalScore * 10) / 10,
                         maxPossibleScore: 5,
                         percentage: (totalScore / 5) * 100,
-                        strengths: data.analysis.strengths || [],
-                        improvements: data.analysis.improvements || [],
+                        strengths: data.strengths || [],
+                        improvements: data.improvements || [],
                         narrativeContext: {
-                            plotArcs: data.analysis.plotArcs || [],
-                            themes: data.analysis.themes || []
+                            plotArcs: data.plotArcs || [],
+                            themes: data.themes || []
                         }
                     });
                 }
@@ -903,7 +923,7 @@ export default function Home() {
                 <Progress 
                   type="circle" 
                   percent={scaledScore * 20} 
-                  width={50} 
+                  size={50}
                   format={() => scaledScore.toFixed(1)} 
                   strokeColor={
                     scaledScore >= 4 ? '#52c41a' : // Green for high scores (4-5)
@@ -968,6 +988,97 @@ export default function Home() {
         return String(dynamics);
     };
 
+    // Helper function to format text with citations in different fonts
+    const formatTextWithCitations = (text: string, itemIndex: number) => {
+        // Split the text into paragraphs
+        const paragraphs = text.split('\n');
+        
+        // Return formatted paragraphs with citations in different styles
+        return paragraphs.map((paragraph, i) => {
+            // Check if this paragraph is a citation (typically in quotes or with special markers)
+            const isCitation = /^["']|^\[.*?\]|^Citation:|^Reference:/i.test(paragraph.trim());
+            
+            // Style differently based on whether it's a citation or regular text
+            if (isCitation) {
+                // Create citation style with different font and background
+                return (
+                    <div 
+                        key={`${itemIndex}-${i}`}
+                        className="citation-text"
+                        style={{
+                            fontFamily: '"Georgia", serif',
+                            fontSize: '15px',
+                            fontStyle: 'italic',
+                            color: '#333',
+                            background: 'rgba(0, 0, 0, 0.03)',
+                            padding: '12px 15px',
+                            borderLeft: '3px solid #1890ff',
+                            marginBottom: '15px',
+                            marginTop: '10px',
+                            borderRadius: '0 4px 4px 0',
+                            position: 'relative'
+                        }}
+                    >
+                        <div 
+                            style={{
+                                position: 'absolute',
+                                top: '5px',
+                                right: '10px',
+                                fontSize: '12px',
+                                color: '#999'
+                            }}
+                        >
+                            Citation
+                        </div>
+                        {paragraph}
+                    </div>
+                );
+            } 
+            // Special formatting for headings (paragraphs that are short and end with a colon)
+            else if (/^.{5,50}:$/.test(paragraph) && paragraph.length < 60) {
+                return (
+                    <h4 
+                        key={`${itemIndex}-${i}`}
+                        style={{
+                            marginTop: '15px',
+                            marginBottom: '8px',
+                            fontWeight: 'bold',
+                            color: '#1890ff',
+                            fontSize: '16px'
+                        }}
+                    >
+                        {paragraph}
+                    </h4>
+                );
+            }
+            // Identify and style key terms, highlights, and bullet points
+            else {
+                const processedText = paragraph
+                    // Convert **text** to proper headings
+                    .replace(/\*\*(.*?)\*\*/g, '<h4 style="margin: 15px 0 8px; color: #333; font-size: 16px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">$1</h4>')
+                    .replace(/\*(.*?)\*/g, '<span style="font-style: italic;">$1</span>')
+                    .replace(/- (.*?)(?=\n|$)/g, '<div style="margin-bottom: 8px;"><span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: #1890ff; margin-right: 8px; margin-bottom: 2px;"></span>$1</div>')
+                    .replace(/\b(excellent|outstanding|exceptional|remarkable|impressive)\b/gi, '<span style="color: #52c41a; font-weight: 500;">$1</span>')
+                    .replace(/\b(improvement|improve|lacking|weak|limited)\b/gi, '<span style="color: #faad14; font-weight: 500;">$1</span>')
+                    .replace(/\b(poor|inadequate|deficient|problematic|flawed)\b/gi, '<span style="color: #f5222d; font-weight: 500;">$1</span>');
+                    
+                return (
+                    <div 
+                        key={`${itemIndex}-${i}`}
+                        style={{ 
+                            marginBottom: i < paragraphs.length - 1 ? '16px' : 0,
+                            lineHeight: '1.8',
+                            fontSize: '14px',
+                            color: '#555',
+                            textAlign: 'justify'
+                        }}
+                        dangerouslySetInnerHTML={{ __html: processedText }}
+                    />
+                );
+            }
+        });
+    };
+
     // Function to generate DOCX report
     const generateDocx = async () => {
         try {
@@ -1008,28 +1119,6 @@ export default function Home() {
                             children: [
                                 new TextRun({
                                     text: summary || "No summary available",
-                                    size: 24
-                                })
-                            ],
-                            spacing: { after: 200 }
-                        }),
-                        
-                        // Prologue Analysis
-                        new DocxParagraph({
-                            children: [
-                                new TextRun({
-                                    text: "Prologue Analysis",
-                                    bold: true,
-                                    size: 28,
-                                    color: '722ED1'
-                                })
-                            ],
-                            spacing: { before: 400, after: 200 }
-                        }),
-                        new DocxParagraph({
-                            children: [
-                                new TextRun({
-                                    text: prologue || "No prologue analysis available",
                                     size: 24
                                 })
                             ],
@@ -1386,7 +1475,11 @@ export default function Home() {
                 pdf.text('Prompt-wise Analysis', 40, yPos);
                 yPos += 30;
                 
-                file.analysis.forEach((item: any) => {
+                // Make sure analysis is actually an array we can iterate over
+                const analysisArray = Array.isArray(file.analysis) ? file.analysis : 
+                                       (Array.isArray(file.analysis.parameters) ? file.analysis.parameters : []);
+                
+                analysisArray.forEach((item: any) => {
                     if (yPos > 750) {
                         pdf.addPage();
                         yPos = 40;
@@ -1428,6 +1521,284 @@ export default function Home() {
         }
     };
 
+    // Add state for screenshot in progress
+    const [takingScreenshot, setTakingScreenshot] = useState(false);
+    
+    // Function to capture full page screenshot in A4 segments
+    const captureFullPageScreenshot = async () => {
+        try {
+            setTakingScreenshot(true);
+            messageApi.loading('Capturing and processing screenshots...');
+            
+            // Wait for the message to display
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Hide any open message first
+            messageApi.destroy();
+            
+            // Get the main content container with proper type assertion
+            const contentElement = document.querySelector('.content-container') as HTMLElement;
+            if (!contentElement) {
+                throw new Error('Content container not found');
+            }
+            
+            // A4 size proportions in PDF points (595 x 842 points at 72 DPI)
+            // For screen display, use a proportional but smaller height to match
+            // what would fit on an A4 page when printed
+            const a4Width = 595; // Standard A4 width in points
+            const a4Height = 842; // Standard A4 height in points
+            
+            // Scale for screen rendering (assuming 96 DPI screen)
+            const screenScale = window.devicePixelRatio || 1;
+            const scaledWidth = Math.floor(a4Width * 1.3); // Slightly larger for better quality
+            const scaledHeight = Math.floor(a4Height * 1.3); // Maintain proportion
+            
+            // Get the actual dimensions of the content
+            const totalHeight = contentElement.scrollHeight;
+            const totalWidth = contentElement.scrollWidth;
+            
+            // Calculate how many segments we need (use the scaledHeight for division)
+            const numSegments = Math.ceil(totalHeight / scaledHeight);
+            
+            console.log('Content dimensions:', { 
+                totalWidth, 
+                totalHeight, 
+                a4Width, 
+                a4Height, 
+                scaledWidth, 
+                scaledHeight, 
+                numSegments,
+                devicePixelRatio: window.devicePixelRatio
+            });
+            
+            messageApi.loading(`Splitting content into ${numSegments} A4 pages...`);
+            
+            // Array to hold all segment canvases
+            const segments: HTMLCanvasElement[] = [];
+            
+            // Create a reusable canvas for the entire content to avoid multiple renderings
+            const fullCanvas = await html2canvas(contentElement, {
+                scrollX: 0,
+                scrollY: -window.scrollY,
+                width: totalWidth,
+                height: totalHeight,
+                scale: screenScale,
+                allowTaint: true,
+                useCORS: true,
+                logging: false
+            });
+            
+            // Split into A4 sized segments
+            for (let i = 0; i < numSegments; i++) {
+                // Calculate the segment's y-position and height
+                const segmentY = i * scaledHeight;
+                const segmentHeight = Math.min(scaledHeight, totalHeight - segmentY);
+                
+                // Create a new canvas for this segment
+                const segmentCanvas = document.createElement('canvas');
+                segmentCanvas.width = scaledWidth;
+                segmentCanvas.height = segmentHeight;
+                
+                // Draw the portion of the full canvas onto this segment
+                const ctx = segmentCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(
+                        fullCanvas, 
+                        0, segmentY,              // Source x, y
+                        totalWidth, segmentHeight, // Source width, height
+                        0, 0,                     // Destination x, y
+                        scaledWidth, segmentHeight // Destination width, height
+                    );
+                }
+                
+                segments.push(segmentCanvas);
+            }
+            
+            // Save each segment as a separate image
+            segments.forEach((canvas, index) => {
+                const imgData = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `ebook-analysis-page-${index + 1}-of-${numSegments}.png`;
+                link.href = imgData;
+                link.click();
+            });
+            
+            // Also create a combined PDF with all pages
+            if (segments.length > 0) {
+                try {
+                    // Create PDF document
+                    const pdf = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'pt',
+                        format: 'a4'
+                    });
+                    
+                    // Add each segment as a page
+                    segments.forEach((canvas, index) => {
+                        // For pages after the first, add a new page
+                        if (index > 0) {
+                            pdf.addPage();
+                        }
+                        
+                        // Convert canvas to image
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                        
+                        // Add to PDF - adjust image to fit A4 page
+                        pdf.addImage(imgData, 'JPEG', 0, 0, a4Width, a4Height * (canvas.height / scaledHeight));
+                    });
+                    
+                    // Save the combined PDF
+                    pdf.save('ebook-analysis-complete.pdf');
+                    
+                    // Success message for PDF
+                    messageApi.success('Created PDF with all pages!', 3);
+                } catch (pdfError) {
+                    console.error('Error creating PDF:', pdfError);
+                    messageApi.error('Failed to create PDF. Individual images were saved successfully.');
+                }
+            }
+            
+            // Optional: Also create a stitched image if there are multiple segments
+            if (numSegments > 1) {
+                // Create a canvas for the stitched image
+                const stitchedCanvas = document.createElement('canvas');
+                stitchedCanvas.width = scaledWidth;
+                stitchedCanvas.height = totalHeight;
+                
+                // Draw all segments onto the stitched canvas
+                const ctx = stitchedCanvas.getContext('2d');
+                if (ctx) {
+                    segments.forEach((segment, index) => {
+                        ctx.drawImage(segment, 0, index * scaledHeight);
+                    });
+                    
+                    // Save the stitched image
+                    const imgData = stitchedCanvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.download = `ebook-analysis-full-stitched.png`;
+                    link.href = imgData;
+                    
+                    // Add a slight delay to avoid conflicts with individual segment downloads
+                    setTimeout(() => {
+                        link.click();
+                    }, 1000);
+                }
+            }
+            
+            messageApi.success(`Saved ${numSegments} A4 page screenshots and PDF!`, 5);
+        } catch (error) {
+            console.error('Error capturing A4 screenshots:', error);
+            messageApi.error('Failed to capture screenshots. Please try again.');
+        } finally {
+            setTakingScreenshot(false);
+        }
+    };
+
+    // Function to directly create a PDF report from the current analysis
+    const generatePdfReport = async () => {
+        try {
+            setCapturingPdf(true);
+            messageApi.loading('Generating PDF report...');
+            
+            // Get the analysis content
+            const analysisElement = document.querySelector('.content-container') as HTMLElement;
+            if (!analysisElement) {
+                throw new Error('Content element not found');
+            }
+            
+            // Create PDF with standard A4 size
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'pt',
+                format: 'a4'
+            });
+            
+            // PDF dimensions
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            
+            // Add cover page
+            pdf.setFontSize(24);
+            pdf.setTextColor(24, 144, 255); // Blue color
+            pdf.text('eBook AI Analysis Report', pageWidth / 2, 80, { align: 'center' });
+            
+            // Add timestamp
+            pdf.setFontSize(12);
+            pdf.setTextColor(0, 0, 0); // Black
+            pdf.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, 120, { align: 'center' });
+            
+            // Get current content as image
+            const canvas = await html2canvas(analysisElement, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                scrollY: -window.scrollY
+            });
+            
+            // Calculate how many pages needed
+            const imgHeight = canvas.height;
+            const imgWidth = canvas.width;
+            
+            // Content scaling to fit page width
+            const contentWidth = pageWidth - 40; // 20pt margins on both sides
+            const scaleFactor = contentWidth / imgWidth;
+            const contentHeight = imgHeight * scaleFactor;
+            
+            // How many pages this will take
+            const totalPages = Math.ceil(contentHeight / (pageHeight - 120)); // 120pt for headers/margins
+            
+            // Calculate content segments
+            for (let i = 0; i < totalPages; i++) {
+                if (i > 0) {
+                    pdf.addPage();
+                }
+                
+                // Source area height
+                const sourceHeight = (pageHeight - 120) / scaleFactor;
+                const sourceY = i * sourceHeight;
+                
+                // Create temporary canvas for this segment
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = imgWidth;
+                tempCanvas.height = Math.min(sourceHeight, imgHeight - sourceY);
+                
+                // Draw portion to temp canvas
+                const ctx = tempCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(
+                        canvas,
+                        0, sourceY,
+                        imgWidth, tempCanvas.height,
+                        0, 0,
+                        imgWidth, tempCanvas.height
+                    );
+                    
+                    // Add to PDF
+                    const imgData = tempCanvas.toDataURL('image/jpeg', 0.9);
+                    pdf.addImage(
+                        imgData, 
+                        'JPEG', 
+                        20, 40, // Margins
+                        contentWidth, tempCanvas.height * scaleFactor
+                    );
+                    
+                    // Add page number
+                    pdf.setFontSize(10);
+                    pdf.text(`Page ${i+1} of ${totalPages}`, pageWidth - 40, pageHeight - 20, { align: 'right' });
+                }
+            }
+            
+            // Save the PDF
+            pdf.save('complete-ebook-analysis.pdf');
+            messageApi.success('PDF report generated successfully!');
+        } catch (error) {
+            console.error('Error generating PDF report:', error);
+            messageApi.error('Failed to generate PDF report');
+        } finally {
+            setCapturingPdf(false);
+        }
+    };
+
     return (
         <AntApp>
             {contextHolder}
@@ -1444,6 +1815,50 @@ export default function Home() {
                 <Layout style={{ minHeight: '100vh', background: '#ffffff' }}>
                     <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
                     <div className="content-container" style={{ padding: '0 50px', marginTop: 64, background: '#ffffff' }}>
+                    
+                    {/* Add floating buttons for screenshots and PDF */}
+                    <div style={{
+                        position: 'fixed',
+                        bottom: 20,
+                        right: 20,
+                        zIndex: 1000,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                    }}>
+                        <Button
+                            type="primary"
+                            shape="circle"
+                            size="large"
+                            icon={<FileImageOutlined />}
+                            onClick={captureFullPageScreenshot}
+                            loading={takingScreenshot}
+                            style={{
+                                width: 50,
+                                height: 50,
+                                boxShadow: '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)'
+                            }}
+                            title="Take Full Page Screenshots (A4 sized)"
+                        />
+                        
+                        <Button
+                            type="primary"
+                            shape="circle"
+                            size="large"
+                            style={{
+                                width: 50,
+                                height: 50,
+                                background: '#52c41a',
+                                borderColor: '#52c41a',
+                                boxShadow: '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)'
+                            }}
+                            icon={<FilePdfOutlined />}
+                            onClick={generatePdfReport}
+                            loading={capturingPdf}
+                            title="Generate Complete PDF Report"
+                        />
+                    </div>
+                    
                     <Header style={{ 
                         backgroundColor: '#1890ff', 
                         color: '#fff', 
@@ -2249,99 +2664,6 @@ export default function Home() {
                                             </div>
                                         )}
                                         
-                                        {prologue && (
-                                                <div className="book-prologue slide-in" style={{ marginBottom: '30px' }}>
-                                                <Title level={4}>
-                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                            <CommentOutlined style={{ marginRight: 8, color: '#722ed1' }} />
-                                                            <span style={{ color: '#722ed1' }}>Compelling Prologue</span>
-                                                    </div>
-                                                </Title>
-                                                    <div style={{
-                                                        padding: '25px',
-                                                        background: 'linear-gradient(to right, rgba(114, 46, 209, 0.05), rgba(114, 46, 209, 0.02))',
-                                                        borderRadius: '12px',
-                                                        border: '1px solid rgba(114, 46, 209, 0.1)',
-                                                        position: 'relative',
-                                                        fontFamily: '"Georgia", serif'
-                                                    }}>
-                                                        <div style={{
-                                                            position: 'absolute',
-                                                            top: '10px',
-                                                            right: '10px',
-                                                            fontSize: '24px',
-                                                            color: 'rgba(114, 46, 209, 0.1)'
-                                                        }}>
-                                                            <CommentOutlined />
-                                                        </div>
-                                                        <div style={{
-                                                            fontSize: '28px',
-                                                            fontFamily: '"Georgia", serif',
-                                                            lineHeight: '1.5',
-                                                            color: '#722ed1',
-                                                            marginBottom: '15px',
-                                                            fontStyle: 'italic',
-                                                            textAlign: 'center'
-                                                        }}>
-                                                            "{prologue.split(' ').slice(0, 7).join(' ')}..."
-                                                        </div>
-                                                        {prologue.split('\n').map((paragraph, i) => {
-                                                            // Process paragraphs to convert ** to headings
-                                                            if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
-                                                                const headingText = paragraph.substring(2, paragraph.length - 2);
-                                                                return (
-                                                                    <div key={i}>
-                                                                        <h4 style={{ 
-                                                                            margin: '15px 0 8px', 
-                                                                            color: '#722ed1', 
-                                                                            fontSize: '17px', 
-                                                                            borderBottom: '1px solid rgba(114, 46, 209, 0.2)', 
-                                                                            paddingBottom: '5px',
-                                                                            fontWeight: 'bold',
-                                                                            fontFamily: '"Georgia", serif',
-                                                                        }}>
-                                                                            {headingText}
-                                                                        </h4>
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            
-                                                            // Check for ** patterns within paragraph
-                                                            const processedText = paragraph.replace(
-                                                                /\*\*(.*?)\*\*/g, 
-                                                                '<h4 style="margin: 15px 0 8px; color: #722ed1; font-size: 17px; border-bottom: 1px solid rgba(114, 46, 209, 0.2); padding-bottom: 5px; font-family: Georgia, serif;">$1</h4>'
-                                                            );
-                                                            
-                                                            if (processedText !== paragraph) {
-    return (
-                                                                    <div 
-                                                                        key={i} 
-                                                                        dangerouslySetInnerHTML={{ __html: processedText }}
-                                                                        style={{ 
-                                                                            marginBottom: i < prologue.split('\n').length - 1 ? '16px' : 0,
-                                                                        }}
-                                                                    />
-                                                                );
-                                                            }
-                                                            
-                                                            return (
-                                                                <Paragraph key={i} style={{ 
-                                                                    fontSize: '16px', 
-                                                                    lineHeight: '1.9',
-                                                                    marginBottom: i < prologue.split('\n').length - 1 ? '16px' : 0,
-                                                                    fontStyle: 'italic',
-                                                                    color: '#333',
-                                                                    textAlign: 'justify'
-                                                                }}>
-                                                                    {paragraph}
-                                                </Paragraph>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                <Divider />
-                                            </div>
-                                        )}
-                                        
                                         {/* Overall Score Section */}
                                         <div className="overall-score-section fade-in" style={{ marginBottom: '20px' }}>
                                             <Title level={4}>Overall Assessment</Title>
@@ -2350,7 +2672,7 @@ export default function Home() {
                                                     className="dashboard-animate"
                                                     type="dashboard" 
                                                     percent={results.percentage} 
-                                                    width={120}
+                                                    size={120}
                                                     format={() => (
                                                         <div>
                                                             <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{results.totalScore}</div>
@@ -2369,9 +2691,17 @@ export default function Home() {
                                                 <div style={{ marginBottom: '15px' }}>
                                                     <Title level={5}>Strengths</Title>
                                                     <ul>
-                                                        {results.strengths.map((strength, index) => (
-                                                            <li className="strength-item" key={index}>{strength}</li>
-                                                        ))}
+                                                        {results.strengths.map((strength, index) => {
+                                                            // Truncate strengths to max 20 words
+                                                            const words = strength.split(' ');
+                                                            const truncatedStrength = words.length > 20 
+                                                                ? words.slice(0, 20).join(' ') + '...'
+                                                                : strength;
+                                                            
+                                                            return (
+                                                                <li className="strength-item" key={index}>{truncatedStrength}</li>
+                                                            );
+                                                        })}
                                                     </ul>
                                                 </div>
                                             )}
@@ -2512,31 +2842,8 @@ export default function Home() {
                                                             }}
                                                         >
                                                             <div>
-                                                                {item.Justification.split('\n').map((paragraph, i) => {
-                                                                    // Identify and style key terms, highlights, and bullet points
-                                                                    const processedText = paragraph
-                                                                        // Convert **text** to proper headings
-                                                                        .replace(/\*\*(.*?)\*\*/g, '<h4 style="margin: 15px 0 8px; color: #333; font-size: 16px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">$1</h4>')
-                                                                        .replace(/\*(.*?)\*/g, '<span style="font-style: italic;">$1</span>')
-                                                                        .replace(/- (.*?)(?=\n|$)/g, '<div style="margin-bottom: 8px;"><span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: ' + scoreColor + '; margin-right: 8px; margin-bottom: 2px;"></span>$1</div>')
-                                                                        .replace(/\b(excellent|outstanding|exceptional|remarkable|impressive)\b/gi, '<span style="color: #52c41a; font-weight: 500;">$1</span>')
-                                                                        .replace(/\b(improvement|improve|lacking|weak|limited)\b/gi, '<span style="color: #faad14; font-weight: 500;">$1</span>')
-                                                                        .replace(/\b(poor|inadequate|deficient|problematic|flawed)\b/gi, '<span style="color: #f5222d; font-weight: 500;">$1</span>');
-
-    return (
-                                                                        <div 
-                                                                            key={i}
-                                                                            style={{ 
-                                                                                marginBottom: i < item.Justification.split('\n').length - 1 ? '16px' : 0,
-                                                                                lineHeight: '1.8',
-                                                                                fontSize: '14px',
-                                                                                color: '#555',
-                                                                                textAlign: 'justify'
-                                                                            }}
-                                                                            dangerouslySetInnerHTML={{ __html: processedText }}
-                                                                        />
-                                                                    );
-                                                                })}
+                                                                {/* Format the justification text to highlight citations */}
+                                                                {formatTextWithCitations(item.Justification, index)}
                                                             </div>
                                                         </Card>
                                                     );
@@ -2590,13 +2897,13 @@ export default function Home() {
                                                 Story Timeline
                                             </Title>
                                             <Card className="timeline-card" style={{ marginBottom: '30px' }}>
-                                                <Timeline mode="alternate">
-                                                    {plotTimeline.map((event, index) => (
-                                                        <Timeline.Item 
-                                                            key={index}
-                                                            color={index % 2 === 0 ? '#722ed1' : '#1890ff'}
-                                                            dot={index % 2 === 0 ? <FieldTimeOutlined /> : <GlobalOutlined />}
-                                                        >
+                                                <Timeline 
+                                                    mode="alternate"
+                                                    items={plotTimeline.map((event, index) => ({
+                                                        key: index,
+                                                        color: index % 2 === 0 ? '#722ed1' : '#1890ff',
+                                                        dot: index % 2 === 0 ? <FieldTimeOutlined /> : <GlobalOutlined />,
+                                                        children: (
                                                             <Card size="small" className="timeline-event">
                                                                 <h4>{event.chapter}</h4>
                                                                 <p>{event.events.join(', ')}</p>
@@ -2610,9 +2917,9 @@ export default function Home() {
                                                                     <small>{event.significance}</small>
                                                                 </div>
                                                             </Card>
-                                                        </Timeline.Item>
-                                                    ))}
-                                                </Timeline>
+                                                        )
+                                                    }))}
+                                                />
                                             </Card>
                                         </div>
 
@@ -2658,60 +2965,273 @@ export default function Home() {
                                             </Card>
                                         </div>
 
-                                        {/* Plot Arc Analysis */}
+                                        {/* Plot Arc Analysis - ENHANCED VERSION */}
                                         <div className="visualization-section">
-                                            <Title level={4}>
+                                            <Title level={4} className="section-heading">
                                                 <BookOutlined style={{ marginRight: 8, color: '#fa8c16' }} />
                                                 Plot Arc Analysis
                                             </Title>
-                                            <Card className="plot-arc-card" style={{ marginBottom: '30px' }}>
+                                            <Card 
+                                                className="plot-arc-card" 
+                                                style={{ 
+                                                    marginBottom: '30px', 
+                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                                    background: 'linear-gradient(to right bottom, rgba(250, 140, 22, 0.03), white)'
+                                                }}
+                                            >
+                                                <div style={{ marginBottom: '20px', fontSize: '15px', lineHeight: '1.6', color: '#555' }}>
+                                                    This analysis breaks down the structural narrative elements of your book, evaluating the effectiveness of various plot arcs.
+                                                </div>
                                                 <div className="plot-arcs">
-                                                    {results.narrativeContext?.plotArcs.map((arc, index) => (
-                                                        <div key={index} className="plot-arc">
-                                                            <h4>{arc.type}</h4>
-                                                            <Progress 
-                                                                percent={arc.effectiveness * 20} 
-                                                                strokeColor={{
-                                                                    '0%': '#fa8c16',
-                                                                    '100%': '#722ed1'
-                                                                }}
-                                                                format={() => `${arc.effectiveness}/5`}
-                                                            />
-                                                            <p>{arc.analysis}</p>
+                                                    {results.narrativeContext?.plotArcs?.map((arc, index) => (
+                                                        <div 
+                                                            key={index} 
+                                                            className="plot-arc"
+                                                            style={{
+                                                                padding: '20px',
+                                                                borderRadius: '10px',
+                                                                background: 'white',
+                                                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.08)',
+                                                                border: '1px solid rgba(250, 140, 22, 0.1)'
+                                                            }}
+                                                        >
+                                                            <div style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                marginBottom: '15px' 
+                                                            }}>
+                                                                <div style={{ 
+                                                                    width: '36px', 
+                                                                    height: '36px', 
+                                                                    borderRadius: '50%', 
+                                                                    background: 'rgba(250, 140, 22, 0.1)', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center', 
+                                                                    marginRight: '10px' 
+                                                                }}>
+                                                                    {index === 0 ? <BookOutlined style={{ color: '#fa8c16' }} /> :
+                                                                     index === 1 ? <UserOutlined style={{ color: '#fa8c16' }} /> :
+                                                                     <SwapOutlined style={{ color: '#fa8c16' }} />}
+                                                                </div>
+                                                                <h4 style={{ margin: 0, color: '#fa8c16', fontWeight: 'bold' }}>
+                                                                    {arc.type}
+                                                                </h4>
+                                                            </div>
+                                                            
+                                                            <div style={{ marginBottom: '15px' }}>
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    justifyContent: 'space-between', 
+                                                                    alignItems: 'center', 
+                                                                    marginBottom: '5px' 
+                                                                }}>
+                                                                    <span style={{ fontSize: '14px', color: '#666' }}>Effectiveness:</span>
+                                                                    <span style={{ 
+                                                                        fontWeight: 'bold', 
+                                                                        color: 
+                                                                            arc.effectiveness >= 4 ? '#52c41a' : 
+                                                                            arc.effectiveness >= 3 ? '#fa8c16' : 
+                                                                            '#f5222d' 
+                                                                    }}>
+                                                                        {arc.effectiveness}/5
+                                                                    </span>
+                                                                </div>
+                                                                <Progress 
+                                                                    percent={arc.effectiveness * 20} 
+                                                                    strokeColor={{
+                                                                        '0%': '#fa8c16',
+                                                                        '100%': '#722ed1'
+                                                                    }}
+                                                                    showInfo={false}
+                                                                />
+                                                            </div>
+                                                            
+                                                            <div style={{ 
+                                                                padding: '12px',
+                                                                backgroundColor: 'rgba(250, 140, 22, 0.03)',
+                                                                borderRadius: '8px',
+                                                                borderLeft: '3px solid #fa8c16'
+                                                            }}>
+                                                                <p style={{ 
+                                                                    margin: 0,
+                                                                    lineHeight: '1.6', 
+                                                                    fontSize: '14px',
+                                                                    color: '#555'
+                                                                }}>
+                                                                    {arc.analysis}
+                                                                </p>
+                                                            </div>
+                                                            
+                                                            <div style={{ 
+                                                                marginTop: '15px', 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between' 
+                                                            }}>
+                                                                <Tag color="#fa8c16">
+                                                                    {index === 0 ? 'Primary' : index === 1 ? 'Character-Driven' : 'Supporting'}
+                                                                </Tag>
+                                                                <div style={{ 
+                                                                    fontSize: '13px', 
+                                                                    color: '#999', 
+                                                                    fontStyle: 'italic' 
+                                                                }}>
+                                                                    {arc.effectiveness >= 4 
+                                                                        ? 'Well executed' 
+                                                                        : arc.effectiveness === 3 
+                                                                        ? 'Adequate development' 
+                                                                        : 'Needs development'}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </Card>
                                         </div>
 
-                                        {/* Thematic Development */}
+                                        {/* Thematic Development - ENHANCED VERSION */}
                                         <div className="visualization-section">
-                                            <Title level={4}>
+                                            <Title level={4} className="section-heading">
                                                 <BookOutlined style={{ marginRight: 8, color: '#eb2f96' }} />
                                                 Thematic Development
                                             </Title>
-                                            <Card className="themes-card" style={{ marginBottom: '30px' }}>
-                                                <div className="themes-grid">
-                                                    {results.narrativeContext?.themes.map((theme, index) => (
-                                                        <Card 
-                                                            key={index} 
-                                                            size="small" 
-                                                            className="theme-card"
-                                                            style={{ marginBottom: '15px' }}
-                                                        >
-                                                            <h4>{theme.name}</h4>
-                                                            <Progress 
-                                                                percent={theme.strength * 20}
-                                                                strokeColor={{
-                                                                    '0%': '#eb2f96',
-                                                                    '100%': '#722ed1'
-                                                                }}
-                                                                format={() => `${theme.strength}/5`}
-                                                            />
-                                                            <p>{theme.development}</p>
-                                                        </Card>
-                                                    ))}
+                                            <Card 
+                                                className="themes-card" 
+                                                style={{ 
+                                                    marginBottom: '30px', 
+                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                                    background: 'linear-gradient(to right bottom, rgba(235, 47, 150, 0.03), white)'
+                                                }}
+                                            >
+                                                <div style={{ marginBottom: '20px', fontSize: '15px', lineHeight: '1.6', color: '#555' }}>
+                                                    Analysis of the central themes in your book and how effectively they are developed throughout the narrative.
                                                 </div>
+                                                <Row gutter={[20, 20]}>
+                                                    {results.narrativeContext?.themes?.map((theme, index) => (
+                                                        <Col xs={24} md={12} lg={8} key={index}>
+                                                            <Card 
+                                                                className="theme-card" 
+                                                                style={{ 
+                                                                    height: '100%',
+                                                                    borderRadius: '10px',
+                                                                    borderLeft: '3px solid #eb2f96',
+                                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                                                    transition: 'all 0.3s ease'
+                                                                }}
+                                                                bodyStyle={{
+                                                                    padding: '20px',
+                                                                    height: '100%',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column'
+                                                                }}
+                                                                hoverable
+                                                            >
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    marginBottom: '15px' 
+                                                                }}>
+                                                                    <div style={{ 
+                                                                        width: '36px', 
+                                                                        height: '36px', 
+                                                                        borderRadius: '50%', 
+                                                                        background: 'rgba(235, 47, 150, 0.1)', 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center', 
+                                                                        justifyContent: 'center',
+                                                                        marginRight: '10px'
+                                                                    }}>
+                                                                        <span style={{ 
+                                                                            color: '#eb2f96', 
+                                                                            fontWeight: 'bold',
+                                                                            fontSize: '18px'
+                                                                        }}>{index + 1}</span>
+                                                                    </div>
+                                                                    <h4 style={{ 
+                                                                        margin: 0, 
+                                                                        color: '#eb2f96', 
+                                                                        fontWeight: 'bold',
+                                                                        fontSize: '16px'
+                                                                    }}>
+                                                                        {theme.name}
+                                                                    </h4>
+                                                                </div>
+                                                                
+                                                                <div style={{ marginBottom: '15px' }}>
+                                                                    <div style={{ 
+                                                                        display: 'flex', 
+                                                                        justifyContent: 'space-between', 
+                                                                        alignItems: 'center',
+                                                                        marginBottom: '5px'
+                                                                    }}>
+                                                                        <span style={{ fontSize: '14px', color: '#666' }}>Strength:</span>
+                                                                        <Tag color="#eb2f96">{theme.strength}/5</Tag>
+                                                                    </div>
+                                                                    <Progress 
+                                                                        percent={theme.strength * 20}
+                                                                        strokeColor={{
+                                                                            '0%': '#eb2f96',
+                                                                            '100%': '#722ed1'
+                                                                        }}
+                                                                        showInfo={false}
+                                                                        size="small"
+                                                                    />
+                                                                </div>
+                                                                
+                                                                <div style={{
+                                                                    padding: '12px',
+                                                                    backgroundColor: 'rgba(235, 47, 150, 0.03)',
+                                                                    borderRadius: '8px',
+                                                                    marginBottom: '15px',
+                                                                    flex: 1
+                                                                }}>
+                                                                    <p style={{ 
+                                                                        margin: 0,
+                                                                        fontSize: '14px',
+                                                                        lineHeight: '1.6',
+                                                                        color: '#555'
+                                                                    }}>
+                                                                        {theme.development}
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                                {/* Theme occurrence indicators */}
+                                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                                    <div 
+                                                                        style={{ 
+                                                                            width: '10px', 
+                                                                            height: '10px', 
+                                                                            borderRadius: '50%', 
+                                                                            background: '#eb2f96',
+                                                                            margin: '0 5px'
+                                                                        }}
+                                                                        title="Beginning"
+                                                                    ></div>
+                                                                    <div 
+                                                                        style={{ 
+                                                                            width: '10px', 
+                                                                            height: '10px', 
+                                                                            borderRadius: '50%',
+                                                                            background: theme.strength >= 3 ? '#eb2f96' : 'rgba(235, 47, 150, 0.3)',
+                                                                            margin: '0 5px'
+                                                                        }}
+                                                                        title="Middle"
+                                                                    ></div>
+                                                                    <div 
+                                                                        style={{ 
+                                                                            width: '10px', 
+                                                                            height: '10px', 
+                                                                            borderRadius: '50%', 
+                                                                            background: theme.strength >= 4 ? '#eb2f96' : 'rgba(235, 47, 150, 0.3)',
+                                                                            margin: '0 5px'
+                                                                        }}
+                                                                        title="End"
+                                                                    ></div>
+                                                                </div>
+                                                            </Card>
+                                                        </Col>
+                                                    ))}
+                                                </Row>
                                             </Card>
                                         </div>
 

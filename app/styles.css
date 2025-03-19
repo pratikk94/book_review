@@ -1038,4 +1038,68 @@
 
 .visualization-section ::-webkit-scrollbar-thumb:hover {
     background: #096dd9;
+}
+
+/* Citation styles */
+.citation-text {
+    font-family: "Georgia", serif;
+    font-style: italic;
+    background: rgba(24, 144, 255, 0.05);
+    border-left: 3px solid #1890ff;
+    padding: 12px 15px;
+    margin: 15px 0;
+    border-radius: 0 4px 4px 0;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.citation-text:hover {
+    background: rgba(24, 144, 255, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.citation-text::before {
+    content: '"';
+    position: absolute;
+    top: -10px;
+    left: 10px;
+    font-size: 40px;
+    color: rgba(24, 144, 255, 0.2);
+    font-family: "Georgia", serif;
+}
+
+.parameter-card {
+    transition: all 0.3s ease;
+}
+
+.parameter-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Section heading styles */
+.section-heading {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    font-size: 18px;
+    color: #333;
+    position: relative;
+}
+
+.section-heading::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -8px;
+    width: 40px;
+    height: 3px;
+    background: #1890ff;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.section-heading:hover::after {
+    width: 100px;
 } 
