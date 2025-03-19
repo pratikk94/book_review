@@ -256,7 +256,32 @@ export default function Home() {
             0% { height: 0; width: 0; opacity: 0; }
             100% { height: 40px; width: 20px; opacity: 1; }
         }
-
+        
+        @keyframes thinking {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-5px) rotate(2deg); }
+            50% { transform: translateY(0) rotate(0deg); }
+            75% { transform: translateY(5px) rotate(-2deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+        
+        @keyframes rotateBook {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+            100% { transform: rotate(0deg); }
+        }
+        
         .book-loading {
             position: relative;
             width: 100%;
@@ -272,6 +297,7 @@ export default function Home() {
             width: 80px;
             height: 100px;
             transform-style: preserve-3d;
+            animation: rotateBook 3s ease-in-out infinite;
         }
 
         .page {
@@ -296,6 +322,83 @@ export default function Home() {
 
         .page:nth-child(3) {
             animation: pageFlip 1.5s infinite 0.6s;
+        }
+        
+        .brain-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .brain {
+            font-size: 60px;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .thinking-dots {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        
+        .dot {
+            width: 10px;
+            height: 10px;
+            margin: 0 5px;
+            background-color: #1890ff;
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+        
+        .dot:nth-child(1) {
+            animation: thinking 0.8s ease-in-out infinite;
+            animation-delay: 0s;
+        }
+        
+        .dot:nth-child(2) {
+            animation: thinking 0.8s ease-in-out infinite;
+            animation-delay: 0.15s;
+        }
+        
+        .dot:nth-child(3) {
+            animation: thinking 0.8s ease-in-out infinite;
+            animation-delay: 0.3s;
+        }
+        
+        .ai-message {
+            font-size: 18px;
+            margin-top: 15px;
+            text-align: center;
+            font-weight: 500;
+            color: #1890ff;
+        }
+        
+        .funny-loading-messages {
+            margin-top: 30px;
+            text-align: center;
+            min-height: 60px;
+        }
+        
+        .loading-message {
+            font-size: 16px;
+            color: #555;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            text-align: center;
+        }
+        
+        .loading-message.active {
+            opacity: 1;
         }
 
         .success-animation {
@@ -376,6 +479,217 @@ export default function Home() {
             font-weight: bold;
             text-align: center;
         }
+        
+        /* Fix for content overflow issues */
+        .ant-card-body {
+            overflow: hidden;
+        }
+        
+        /* Fix for tag overflow */
+        .ant-tag {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-bottom: 5px;
+        }
+        
+        /* Character network fixes */
+        .character-network {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .character-node {
+            flex: 1 1 300px;
+            max-width: 100%;
+            padding: 15px;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        
+        .character-info h4 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        
+        .character-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        
+        .character-relationships {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        .relationship-line {
+            white-space: normal;
+            word-break: break-word;
+            margin-bottom: 5px;
+        }
+        
+        /* Timeline fixes */
+        .timeline-event {
+            max-width: 100%;
+            overflow: hidden;
+        }
+        
+        .timeline-event h4 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .timeline-event p {
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        
+        .event-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+        
+        .event-significance {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+            max-height: 40px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        
+        /* World building elements fixes */
+        .element-card {
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .element-list {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .element-list li {
+            margin-bottom: 5px;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        .location-item {
+            margin-bottom: 10px;
+        }
+        
+        .location-item h4 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .location-item ul {
+            padding-left: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .location-item ul li {
+            white-space: normal;
+            word-break: break-word;
+            margin-bottom: 5px;
+        }
+        
+        /* Plot arc and theme fixes */
+        .plot-arcs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .plot-arc {
+            height: 100%;
+        }
+        
+        .theme-card p {
+            white-space: normal;
+            word-break: break-word;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 5;
+            -webkit-box-orient: vertical;
+        }
+        
+        /* Custom card fixes */
+        .custom-card {
+            overflow: hidden;
+        }
+        
+        /* Editorial feedback fixes */
+        .feedback-entry {
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .feedback-entry h4 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        
+        .feedback-entry p, .feedback-entry .ant-typography {
+            white-space: normal;
+            word-break: break-word;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 4;
+            -webkit-box-orient: vertical;
+        }
+        
+        .citation-text {
+            white-space: normal;
+            word-break: break-word;
+            overflow: hidden;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        /* Mobile responsiveness fixes */
+        @media (max-width: 768px) {
+            .plot-arcs {
+                grid-template-columns: 1fr;
+            }
+            
+            .mobile-responsive-button {
+                width: 100%;
+                margin: 5px 0 !important;
+            }
+            
+            .character-node {
+                flex: 1 1 100%;
+            }
+        }
     `;
     
     // Refs for capturing PDF content
@@ -385,6 +699,58 @@ export default function Home() {
     // Create a message API instance
     const [messageApi, contextHolder] = message.useMessage();
 
+    // Add these near the other state variables
+    const [vercelDeployment, setVercelDeployment] = useState(false);
+    const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+    
+    // Add this to the component
+    const funnyLoadingMessages = [
+        "Reading every word... twice for good measure",
+        "Consulting with fictional literary experts",
+        "Teaching AI to recognize sarcasm (still working on it)",
+        "Searching for plot holes... and donuts",
+        "Analyzing whether any characters would make good memes",
+        "Counting words obsessively",
+        "Debating whether this book would make a good movie",
+        "Finding the deepest meaning... or making one up",
+        "Brewing coffee for our AI brain cells",
+        "Checking if AI would be a better protagonist",
+        "Building suspense... by processing very slowly",
+        "Wondering if we should write our own book instead",
+        "Calculating how many trees were saved by using eBooks",
+        "Judging the book by its cover (then by its content)",
+        "Taking a quick nap... just kidding, AIs don't sleep",
+        "Job status not found, but we're still thinking really hard"
+    ];
+
+    // Add this useEffect to rotate through the funny messages
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        
+        if (vercelDeployment && showAnalysisOverlay) {
+            interval = setInterval(() => {
+                setLoadingMessageIndex(prev => (prev + 1) % funnyLoadingMessages.length);
+            }, 4000);
+        }
+        
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [vercelDeployment, showAnalysisOverlay, funnyLoadingMessages.length]);
+    
+    // In the startSimpleProgressCheck function, add this line:
+    const startSimpleProgressCheck = () => {
+        setVercelDeployment(true);
+        // Rest of the existing function...
+    };
+    
+    // Also update in the useEffect polling job status, when handling "vercelDeployment" status:
+    if (data.vercelDeployment) {
+        console.log("Received vercelDeployment status - job status not found but continuing processing");
+        setVercelDeployment(true);
+        // Rest of existing code...
+    }
+    
     // Enhanced polling logic for job status that's more resilient to errors
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -776,6 +1142,7 @@ export default function Home() {
             // Special handling for Vercel deployments where job status is lost between serverless function calls
             if (data.vercelDeployment) {
                 console.log("Received vercelDeployment status - job status not found but continuing processing");
+                setVercelDeployment(true);
                 
                 // Update progress but not too quickly to avoid false completions
                 const currentProgress = progress || 0;
