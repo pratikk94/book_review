@@ -190,6 +190,7 @@ export default function Home() {
     const [progress, setProgress] = useState(0);
     const [capturingPdf, setCapturingPdf] = useState(false);
     const [pdfSuccess, setPdfSuccess] = useState(false);
+    const resultCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Analysis result states
     const [results, setResults] = useState<AnalysisResults>({
@@ -869,35 +870,96 @@ export default function Home() {
         };
     }, [jobId, loading]);
     
+    // Check URL parameters for serverless mode request
+    useEffect(() => {
+        // If URL contains ?serverless=true, automatically switch to serverless mode
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('serverless') === 'true') {
+                console.log("Serverless mode detected in URL, activating serverless mode");
+                setVercelDeployment(true);
+                
+                // Remove the parameter from URL to avoid loops
+                const newUrl = window.location.pathname + 
+                    (window.location.search.replace(/[?&]serverless=true/, '')
+                        .replace(/^&/, '?') || '') +
+                    window.location.hash;
+                window.history.replaceState({}, document.title, newUrl);
+                
+                // Show message to user
+                message.info("Running in serverless mode for better stability", 5);
+            }
+        }
+    }, []);
+    
+    // Function to restart in emergency mode
+    const restartInEmergencyMode = () => {
+        // Add serverless=true parameter to URL and reload page
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('serverless', 'true');
+        window.location.href = currentUrl.toString();
+    };
+
+    // Add check for final result button to serverless display
+    const checkForResults = () => {
+        message.loading("Checking for results...", 3);
+        checkFinalResult(false);
+    };
+    
     // Simple progress checker for Vercel deployments where we can't use in-memory job status
     const startSimpleProgressCheck = () => {
         // Use artificial progress as fallback
         let artificialProgress = 20;
         setVercelDeployment(true); // Set vercelDeployment flag for better UI
-        const progressInterval = setInterval(() => {
-            if (artificialProgress >= 90) {
-                clearInterval(progressInterval);
-                // After approximately 60 seconds, try once more to get the result directly
-                setTimeout(() => {
-                    checkFinalResult();
-                }, 10000);
-                return;
-            }
-            
-            artificialProgress += 5;
-            setProgress(artificialProgress);
-            
-            // Update stages based on progress for better UX
-            if (artificialProgress < 30) setAnalysisStage("Extracting text from document...");
-            else if (artificialProgress < 50) setAnalysisStage("Analyzing content...");
-            else if (artificialProgress < 70) setAnalysisStage("Generating insights...");
-            else setAnalysisStage("Finalizing report...");
-            
-        }, 2000);
+        
+        // Set up periodic checks for results
+        const autoCheckInterval = setInterval(() => {
+            // Try to get final results without showing errors
+            fetch(`/api/analyze?finalResult=true&jobId=${jobId}`)
+                .then(response => {
+                    if (response.ok) return response.json();
+                    throw new Error("Not ready yet");
+                })
+                .then(data => {
+                    if (data.analysis) {
+                        // Success! We have the final data
+                        clearInterval(autoCheckInterval);
+                        setLoading(false);
+                        setProgress(100);
+                        setAnalysisStage("Analysis complete!");
+                        setShowAnalysisOverlay(false);
+                        
+                        // Update UI with results
+                        setAnalysis(data.analysis);
+                        setSummary(data.summary || "");
+                        setPrologue(data.prologue || "");
+                        setConstructiveCriticism(data.constructiveCriticism || "");
+                    } else {
+                        // Still processing, increase progress gradually
+                        artificialProgress = Math.min(artificialProgress + 2, 90);
+                        setProgress(artificialProgress);
+                    }
+                })
+                .catch(error => {
+                    console.log("Periodic check: still processing...");
+                    // Increase progress more slowly if we're getting errors
+                    artificialProgress = Math.min(artificialProgress + 1, 90);
+                    setProgress(artificialProgress);
+                });
+        }, 15000); // Check every 15 seconds
+        
+        // Store interval ref so we can clear it when needed
+        resultCheckIntervalRef.current = autoCheckInterval;
+        
+        // Update stages based on progress for better UX
+        if (artificialProgress < 30) setAnalysisStage("Extracting text from document...");
+        else if (artificialProgress < 50) setAnalysisStage("Analyzing content...");
+        else if (artificialProgress < 70) setAnalysisStage("Generating insights...");
+        else setAnalysisStage("Finalizing report...");
     };
     
     // Check for final result directly instead of relying on status updates
-    const checkFinalResult = async () => {
+    const checkFinalResult = async (showError: boolean = true) => {
         try {
             // Try to get the final result directly using a special endpoint/param
             const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`);
@@ -3842,6 +3904,13 @@ export default function Home() {
                                             {message}
                                         </div>
                                     ))}
+                                    <Button 
+                                        type="primary" 
+                                        onClick={checkForResults} 
+                                        style={{ marginTop: '30px' }}
+                                    >
+                                        Check for Results
+                                    </Button>
                                 </div>
                             ) : (
                                 <>
@@ -3866,6 +3935,18 @@ export default function Home() {
                                             {progress}% Complete
                                         </div>
                                     </div>
+
+                                    {/* Add emergency restart button */}
+                                    {progress > 20 && progress < 95 && (
+                                        <Button 
+                                            type="primary" 
+                                            danger 
+                                            onClick={restartInEmergencyMode}
+                                            style={{ marginTop: '15px' }}
+                                        >
+                                            Restart in Emergency Mode
+                                        </Button>
+                                    )}
                                 </>
                             )}
                             
