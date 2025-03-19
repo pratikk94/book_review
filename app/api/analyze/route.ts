@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, writeFileSync } from "fs";
 import { join } from "path";
 import { default as pdfParse } from "pdf-parse";
+import mammoth from "mammoth";
 import OpenAI from "openai";
 import { parse } from "json2csv";
 
@@ -24,205 +25,321 @@ try {
 // Add a simple GET handler for testing
 export async function GET() {
   console.log("GET /api/analyze");
-  return NextResponse.json({ message: "Analyze API endpoint is working. Send a POST request with a PDF file to analyze." });
+  return NextResponse.json({ message: "Analyze API endpoint is working. Send a POST request with a PDF or DOCX file to analyze." });
 }
 
-export async function POST(request: NextRequest) {
-  console.log("POST /api/analyze");
-  
-  try {
-    // Parse the form data
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+// Add type definitions
+interface ChunkStatus {
+    chunk: number;
+    status: 'processing' | 'completed' | 'error';
+    message: string;
+}
 
-    if (!file) {
-      console.log("No file uploaded");
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+interface AnalysisItem {
+    Parameter: string;
+    Score: number;
+    Justification: string;
+}
+
+// Add helper functions
+function splitTextIntoChunks(text: string): string[] {
+    const CHUNK_SIZE = 15000;
+    const chunks: string[] = [];
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+        chunks.push(text.slice(i, i + CHUNK_SIZE));
     }
+    return chunks;
+}
 
-    console.log("File received:", file.name, file.size);
-
-    // Convert file to buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+function generateCSV(analysis: AnalysisItem[]): string {
+    const headers = ['Parameter', 'Score', 'Justification'];
+    const rows = analysis.map(item => [
+        item.Parameter,
+        item.Score.toString(),
+        `"${item.Justification.replace(/"/g, '""')}"`
+    ]);
     
-    // Parse PDF
-    let pdfData;
+    return [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+    ].join('\n');
+}
+
+export async function POST(req: Request) {
     try {
-      pdfData = await pdfParse(buffer);
-    } catch (error) {
-      console.error("Error parsing PDF:", error);
-      return NextResponse.json({ error: "Failed to parse PDF file" }, { status: 400 });
-    }
-    
-    const text = pdfData.text;
-    console.log("Text extracted, length:", text.length);
-
-    // Create OpenAI prompt
-    const prompt = `
-    Analyze the following eBook based on these 10 parameters. Rate each on a scale of 1-5 and provide justification:
+        const formData = await req.formData();
+        const file = formData.get("file") as File;
         
-    1. Readability Score
-    2. Content Originality & Plagiarism Detection
-    3. Sentiment Analysis
-    4. Keyword Density & Topic Relevance
-    5. Writing Style & Grammar Check
-    6. Structure & Formatting Quality
-    7. Engagement & Readability Flow
-    8. Complexity & Technical Depth
-    9. Named Entity Recognition (NER) & Topic Categorization
-    10. Summary & Key Insights Generation
-
-    Text:
-    ${text.slice(0, 5000)}
-
-    Provide the output in JSON format as:
-    [
-      { "Parameter": "Readability Score", "Score": 4, "Justification": "Clear and well-structured sentences." },
-      { "Parameter": "Content Originality & Plagiarism Detection", "Score": 3, "Justification": "Mostly original but some common phrases detected." }
-    ]
-
-    Additionally, provide a concise summary of the book (150-200 words) and a compelling prologue (100 words) in this JSON format.
-
-    Most importantly, include a detailed constructive criticism section (MINIMUM 200 WORDS) that provides actionable feedback on how the author could improve the book. This should be specific, balanced, and genuinely helpful for the author's development. Focus on both strengths to build upon and weaknesses to address. Structure the feedback as a professional editorial assessment with clear recommendations.
-
-    The full response should be in this JSON format:
-    {
-      "summary": "A comprehensive summary of the main points and value of the book...",
-      "prologue": "An engaging introduction that captures the essence of the book...",
-      "constructiveCriticism": "A detailed analysis of the book's strengths and weaknesses, with specific suggestions for improvement... (minimum 200 words)"
-    }
-    `;
-
-    console.log("Calling OpenAI API");
-    
-    // Call OpenAI
-    const response = await openai.chat.completions.create(
-      {
-        model: "gpt-4",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.5,
-      },
-      {
-        timeout: 120000, // 2 minute timeout
-      }
-    );
-
-    console.log("OpenAI response received");
-    
-    const responseContent = response.choices[0]?.message?.content || "";
-    console.log("Response content:", responseContent);
-    
-    // Parse the response
-    let analysis: Array<{ Parameter: string; Score: number; Justification: string }> = [];
-    let bookInfo = { summary: "", prologue: "", constructiveCriticism: "" };
-    
-    try {
-      // First, try to parse the entire response as a single JSON object
-      const jsonResponse = JSON.parse(responseContent);
-      
-      if (Array.isArray(jsonResponse)) {
-        // The response is just the analysis array
-        analysis = jsonResponse;
-      } else {
-        // The response might contain both parts
-        if (jsonResponse.analysis && Array.isArray(jsonResponse.analysis)) {
-          analysis = jsonResponse.analysis;
+        if (!file) {
+            return NextResponse.json({ error: "No file provided" }, { status: 400 });
         }
-        if (jsonResponse.summary) {
-          bookInfo.summary = jsonResponse.summary;
+
+        // Get file content
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        let text = "";
+
+        // Extract text based on file type
+        if (file.name.endsWith(".pdf")) {
+            const pdf = await pdfParse(buffer);
+            text = pdf.text;
+        } else if (file.name.endsWith(".docx")) {
+            const result = await mammoth.extractRawText({ buffer });
+            text = result.value;
         }
-        if (jsonResponse.prologue) {
-          bookInfo.prologue = jsonResponse.prologue;
+
+        // Split text into chunks
+        const chunks = splitTextIntoChunks(text);
+        const chunkStatus: ChunkStatus[] = [];
+        let combinedAnalysis: AnalysisItem[] = [];
+        let combinedSummary = "";
+        let combinedPrologue = "";
+        let combinedCriticism = "";
+
+        // Process each chunk
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            chunkStatus.push({
+                chunk: i + 1,
+                status: 'processing',
+                message: `Processing chunk ${i + 1}/${chunks.length}`
+            });
+
+            try {
+                const response = await openai.chat.completions.create({
+                    model: "gpt-3.5-turbo-16k",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `You are a book analysis assistant. Your task is to analyze text and provide structured feedback. You must respond using the function calling format with the analyze_book function.`
+                        },
+                        {
+                            role: "user",
+                            content: `Analyze this text and provide feedback: ${chunk}`
+                        }
+                    ],
+                    functions: [
+                        {
+                            name: "analyze_book",
+                            description: "Analyze a section of text and provide structured feedback",
+                            parameters: {
+                                type: "object",
+                                properties: {
+                                    analysis: {
+                                        type: "array",
+                                        items: {
+                                            type: "object",
+                                            properties: {
+                                                Parameter: {
+                                                    type: "string",
+                                                    enum: ["Readability", "Content Quality", "Structure", "Grammar & Style", "Originality"]
+                                                },
+                                                Score: {
+                                                    type: "number",
+                                                    minimum: 1,
+                                                    maximum: 5
+                                                },
+                                                Justification: {
+                                                    type: "string"
+                                                }
+                                            },
+                                            required: ["Parameter", "Score", "Justification"]
+                                        }
+                                    },
+                                    summary: {
+                                        type: "string"
+                                    },
+                                    prologue: {
+                                        type: "string"
+                                    },
+                                    constructiveCriticism: {
+                                        type: "string"
+                                    }
+                                },
+                                required: ["analysis", "summary", "prologue", "constructiveCriticism"]
+                            }
+                        }
+                    ],
+                    function_call: { name: "analyze_book" },
+                    temperature: 0.3,
+                    max_tokens: 2000,
+                });
+
+                const functionCall = response.choices[0]?.message?.function_call;
+                if (!functionCall || functionCall.name !== "analyze_book") {
+                    throw new Error("Invalid function call response");
+                }
+
+                let parsedContent;
+                try {
+                    parsedContent = JSON.parse(functionCall.arguments);
+                } catch (parseError) {
+                    console.error(`Failed to parse function arguments for chunk ${i + 1}:`, functionCall.arguments);
+                    throw new Error(`Invalid JSON in function arguments: ${parseError.message}`);
+                }
+
+                // Validate the response structure
+                if (!parsedContent.analysis || !Array.isArray(parsedContent.analysis)) {
+                    throw new Error("Response missing analysis array");
+                }
+
+                // Ensure all required fields are present and properly formatted
+                const requiredFields = ['summary', 'prologue', 'constructiveCriticism'];
+                for (const field of requiredFields) {
+                    if (!parsedContent[field]) {
+                        parsedContent[field] = `No ${field} provided for this section.`;
+                    }
+                }
+
+                // Validate analysis array structure
+                if (!parsedContent.analysis.every((item: any) => 
+                    item.Parameter && 
+                    typeof item.Score === 'number' && 
+                    item.Justification
+                )) {
+                    throw new Error("Invalid analysis array structure");
+                }
+
+                // Combine results
+                if (parsedContent.analysis) {
+                    combinedAnalysis = [...combinedAnalysis, ...parsedContent.analysis];
+                }
+                if (parsedContent.summary) {
+                    combinedSummary += parsedContent.summary + "\n";
+                }
+                if (parsedContent.prologue) {
+                    combinedPrologue += parsedContent.prologue + "\n";
+                }
+                if (parsedContent.constructiveCriticism) {
+                    combinedCriticism += parsedContent.constructiveCriticism + "\n";
+                }
+
+                chunkStatus[i].status = 'completed';
+                chunkStatus[i].message = `Chunk ${i + 1}/${chunks.length} completed successfully`;
+
+                // Add delay between chunks to avoid rate limits
+                if (i < chunks.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay between chunks
+                }
+            } catch (error) {
+                console.error(`Error processing chunk ${i + 1}:`, error);
+                chunkStatus[i].status = 'error';
+                chunkStatus[i].message = `Error processing chunk ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                
+                // Retry the chunk once with a simpler prompt
+                try {
+                    console.log(`Retrying chunk ${i + 1}...`);
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+                    const retryResponse = await openai.chat.completions.create({
+                        model: "gpt-3.5-turbo-16k",
+                        messages: [
+                            {
+                                role: "system",
+                                content: "You are a book analysis assistant. Your task is to analyze text and provide structured feedback. You must respond using the function calling format with the analyze_book function."
+                            },
+                            {
+                                role: "user",
+                                content: `Analyze this text and provide feedback: ${chunk}`
+                            }
+                        ],
+                        functions: [
+                            {
+                                name: "analyze_book",
+                                description: "Analyze a section of text and provide structured feedback",
+                                parameters: {
+                                    type: "object",
+                                    properties: {
+                                        analysis: {
+                                            type: "array",
+                                            items: {
+                                                type: "object",
+                                                properties: {
+                                                    Parameter: {
+                                                        type: "string",
+                                                        enum: ["Readability", "Content Quality", "Structure", "Grammar & Style", "Originality"]
+                                                    },
+                                                    Score: {
+                                                        type: "number",
+                                                        minimum: 1,
+                                                        maximum: 5
+                                                    },
+                                                    Justification: {
+                                                        type: "string"
+                                                    }
+                                                },
+                                                required: ["Parameter", "Score", "Justification"]
+                                            }
+                                        },
+                                        summary: {
+                                            type: "string"
+                                        },
+                                        prologue: {
+                                            type: "string"
+                                        },
+                                        constructiveCriticism: {
+                                            type: "string"
+                                        }
+                                    },
+                                    required: ["analysis", "summary", "prologue", "constructiveCriticism"]
+                                }
+                            }
+                        ],
+                        function_call: { name: "analyze_book" },
+                        temperature: 0.1,
+                        max_tokens: 2000,
+                    });
+
+                    const retryFunctionCall = retryResponse.choices[0]?.message?.function_call;
+                    if (!retryFunctionCall || retryFunctionCall.name !== "analyze_book") {
+                        throw new Error("Invalid function call response in retry");
+                    }
+
+                    const retryParsedContent = JSON.parse(retryFunctionCall.arguments);
+                    
+                    // Validate retry response
+                    if (!retryParsedContent.analysis || !Array.isArray(retryParsedContent.analysis)) {
+                        throw new Error("Retry response missing analysis array");
+                    }
+
+                    // Combine retry results
+                    if (retryParsedContent.analysis) {
+                        combinedAnalysis = [...combinedAnalysis, ...retryParsedContent.analysis];
+                    }
+                    if (retryParsedContent.summary) {
+                        combinedSummary += retryParsedContent.summary + "\n";
+                    }
+                    if (retryParsedContent.prologue) {
+                        combinedPrologue += retryParsedContent.prologue + "\n";
+                    }
+                    if (retryParsedContent.constructiveCriticism) {
+                        combinedCriticism += retryParsedContent.constructiveCriticism + "\n";
+                    }
+
+                    chunkStatus[i].status = 'completed';
+                    chunkStatus[i].message = `Chunk ${i + 1}/${chunks.length} completed successfully after retry`;
+                } catch (retryError) {
+                    console.error(`Retry failed for chunk ${i + 1}:`, retryError);
+                    chunkStatus[i].message = `Failed after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`;
+                }
+            }
         }
-        if (jsonResponse.constructiveCriticism) {
-          bookInfo.constructiveCriticism = jsonResponse.constructiveCriticism;
-        }
-      }
-    } catch (parseError) {
-      // If it's not a clean JSON, try to extract the parts
-      console.log("Couldn't parse as clean JSON, trying to extract parts");
-      
-      // First, look for the analysis array
-      try {
-        // Use a more robust regex that can handle multi-line JSON arrays
-        const analysisMatch = responseContent.match(/\[\s*\{\s*"Parameter"[\s\S]*?\}\s*\]/);
-        if (analysisMatch) {
-          console.log("Found analysis array pattern");
-          analysis = JSON.parse(analysisMatch[0]);
-        }
-      } catch (arrayError) {
-        console.error("Error extracting analysis array:", arrayError);
-      }
-      
-      // Then look for the book info object
-      try {
-        const infoMatch = responseContent.match(/\{\s*"summary"[\s\S]*?\}\s*\}/);
-        if (infoMatch) {
-          console.log("Found summary/prologue/criticism object pattern");
-          bookInfo = JSON.parse(infoMatch[0]);
-        }
-      } catch (infoError) {
-        console.error("Error extracting book info:", infoError);
-      }
-    }
-    
-    // Check if analysis is empty and provide a default if needed
-    if (!analysis || analysis.length === 0) {
-      console.warn("Analysis array is empty, using default values");
-      analysis = [
-        { 
-          Parameter: "Analysis Failed", 
-          Score: 0, 
-          Justification: "The AI could not generate a proper analysis. Please try again with a different document." 
-        }
-      ];
-    }
-    
-    // Generate CSV
-    let csvData = "";
-    try {
-      csvData = parse(analysis);
-    } catch (csvError) {
-      console.error("Error generating CSV:", csvError);
-      csvData = "Parameter,Score,Justification\nError,0,Failed to generate CSV report";
-    }
-    
-    const csvPath = join(publicDir, 'report.csv');
-    
-    // Write CSV to file
-    try {
-      writeFileSync(csvPath, csvData);
-      console.log("CSV file created:", csvPath);
+
+        // Generate CSV file
+        const csvContent = generateCSV(combinedAnalysis);
+        const csvBuffer = Buffer.from(csvContent);
+        const csvBlob = new Blob([csvBuffer], { type: 'text/csv' });
+        const csvUrl = URL.createObjectURL(csvBlob);
+
+        return NextResponse.json({
+            analysis: combinedAnalysis,
+            summary: combinedSummary.trim(),
+            prologue: combinedPrologue.trim(),
+            constructiveCriticism: combinedCriticism.trim(),
+            downloadLink: csvUrl,
+            chunkStatus
+        });
     } catch (error) {
-      console.error("Error writing CSV file:", error);
-      return NextResponse.json({ error: "Failed to create CSV report" }, { status: 500 });
+        console.error("Error:", error);
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
     }
-
-    // Return result with analysis, book info, and download link
-    return NextResponse.json({ 
-      analysis, 
-      summary: bookInfo.summary,
-      prologue: bookInfo.prologue,
-      constructiveCriticism: bookInfo.constructiveCriticism,
-      downloadLink: "/report.csv" 
-    });
-  } catch (error) {
-    console.error("Error processing request:", error);
-    
-    // Provide more detailed error information
-    let errorMessage = "Internal server error";
-    let errorDetails = String(error);
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      errorDetails = error.stack || String(error);
-    }
-    
-    return NextResponse.json({ 
-      error: errorMessage, 
-      details: errorDetails,
-      stage: "pdf_processing" // Help identify where the error occurred
-    }, { status: 500 });
-  }
 } 

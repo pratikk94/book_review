@@ -1,16 +1,167 @@
 'use client';
 
 import React, { useState, useRef } from "react";
-import { Layout, Upload, Button, Table, Spin, Alert, Card, Row, Col, Typography, Divider, Progress } from "antd";
+import { Layout, Upload, Button, Table, Spin, Alert, Card, Row, Col, Typography, Divider, Progress, message, Modal } from "antd";
 import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined } from "@ant-design/icons";
-import html2canvas from 'html2canvas';
+import domtoimage from 'dom-to-image';
 import jsPDF from 'jspdf';
+import './styles.css';
+import { Document, Page, View, Text as PDFText, StyleSheet, pdf } from '@react-pdf/renderer';
+import { saveAs } from 'file-saver';
+import html2canvas from 'html2canvas';
+import { Document as DocxDocument, Packer, Paragraph as DocxParagraph, TextRun, Table as DocxTable, TableCell, TableRow } from 'docx';
 // For App Router, we use Next.js's built-in CSS import support
 // Remove the CSS import and add style through tailwind or inline styles
 // import 'antd/dist/reset.css';
 
 const { Header, Content, Footer } = Layout;
 const { Title, Paragraph, Text } = Typography;
+
+// Create styles for PDF elements
+const pdfStyles = StyleSheet.create({
+  page: {
+    padding: 20,
+    backgroundColor: '#ffffff',
+  },
+  section: {
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1890ff',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  text: {
+    fontSize: 12,
+    lineHeight: 1.5,
+    marginBottom: 5,
+  },
+  scoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  scoreLabel: {
+    fontSize: 12,
+    marginRight: 10,
+  },
+  scoreValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1890ff',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    borderBottomStyle: 'solid',
+    padding: '8px 0',
+  },
+  tableHeader: {
+    backgroundColor: '#f5f5f5',
+    fontWeight: 'bold',
+  },
+  tableCell: {
+    flex: 1,
+    padding: 6,
+    fontSize: 10,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 10,
+    color: '#999999',
+  },
+  pageNumber: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    fontSize: 10,
+    color: '#999999',
+  },
+});
+
+// Create a PDF Document component
+const AnalysisReport = ({ data, fileName }) => (
+  <Document title={`${fileName || "eBook"} Analysis Report`}>
+    <Page size="A4" style={pdfStyles.page}>
+      <View style={pdfStyles.section}>
+        <PDFText style={pdfStyles.title}>eBook AI Analysis Report</PDFText>
+        <PDFText style={pdfStyles.text}>File: {fileName || "eBook Analysis"}</PDFText>
+        <PDFText style={pdfStyles.text}>Generated: {new Date().toLocaleDateString()}</PDFText>
+      </View>
+      
+      {data.summary && (
+        <View style={pdfStyles.section}>
+          <PDFText style={pdfStyles.title}>Book Summary</PDFText>
+          <PDFText style={pdfStyles.text}>{data.summary}</PDFText>
+        </View>
+      )}
+    </Page>
+    
+    {data.prologue && (
+      <Page size="A4" style={pdfStyles.page}>
+        <View style={pdfStyles.section}>
+          <PDFText style={pdfStyles.title}>Compelling Prologue</PDFText>
+          <PDFText style={pdfStyles.text}>{data.prologue}</PDFText>
+        </View>
+      </Page>
+    )}
+    
+    <Page size="A4" style={pdfStyles.page}>
+      <View style={pdfStyles.section}>
+        <PDFText style={pdfStyles.title}>Overall Assessment</PDFText>
+        <View style={pdfStyles.scoreContainer}>
+          <PDFText style={pdfStyles.scoreLabel}>Overall Score:</PDFText>
+          <PDFText style={pdfStyles.scoreValue}>{data.overallScore}/5</PDFText>
+        </View>
+        
+        <PDFText style={pdfStyles.subtitle}>Strengths:</PDFText>
+        {data.strengths?.map((strength, index) => (
+          <PDFText key={`strength-${index}`} style={pdfStyles.text}>• {strength}</PDFText>
+        ))}
+        
+        <PDFText style={pdfStyles.subtitle}>Areas for Improvement:</PDFText>
+        {data.areasForImprovement?.map((area, index) => (
+          <PDFText key={`area-${index}`} style={pdfStyles.text}>• {area}</PDFText>
+        ))}
+      </View>
+    </Page>
+    
+    <Page size="A4" style={pdfStyles.page}>
+      <View style={pdfStyles.section}>
+        <PDFText style={pdfStyles.title}>Detailed Analysis</PDFText>
+        <View style={[pdfStyles.tableRow, pdfStyles.tableHeader]}>
+          <PDFText style={pdfStyles.tableCell}>Parameter</PDFText>
+          <PDFText style={pdfStyles.tableCell}>Score</PDFText>
+          <PDFText style={pdfStyles.tableCell}>Analysis</PDFText>
+        </View>
+        
+        {data.analysisData?.map((item, index) => (
+          <View key={`item-${index}`} style={pdfStyles.tableRow}>
+            <PDFText style={pdfStyles.tableCell}>{item.parameter}</PDFText>
+            <PDFText style={pdfStyles.tableCell}>{item.score}/5</PDFText>
+            <PDFText style={pdfStyles.tableCell}>{item.analysis}</PDFText>
+          </View>
+        ))}
+      </View>
+      
+      <PDFText style={pdfStyles.footer}>eBook AI Analyzer Report</PDFText>
+      <PDFText style={pdfStyles.pageNumber} render={({ pageNumber, totalPages }) => (
+        `Page ${pageNumber} of ${totalPages}`
+      )} />
+    </Page>
+  </Document>
+);
 
 export default function Home() {
     const [file, setFile] = useState<File | null>(null);
@@ -25,15 +176,25 @@ export default function Home() {
     const [progress, setProgress] = useState<number>(0);
     const [capturingPdf, setCapturingPdf] = useState(false);
     const [pdfSuccess, setPdfSuccess] = useState(false);
+    const [processingLogs, setProcessingLogs] = useState<string[]>([]);
+    const [showAnalysisOverlay, setShowAnalysisOverlay] = useState(false);
     
     // Refs for capturing PDF content
     const editorialContentRef = useRef<HTMLDivElement>(null);
     const analysisContentRef = useRef<HTMLDivElement>(null);
     
     const handleFileChange = (info: any) => {
-        if (info.file.status === "done") {
-            setFile(info.file.originFileObj);
+        const file = info?.fileList?.[0]?.originFileObj;
+        if (!file) {
+            return;
         }
+
+        const fileType = file.name.toLowerCase().split('.').pop();
+        if (fileType !== 'pdf' && fileType !== 'docx') {
+            message.error('Please upload a PDF or DOCX file');
+            return;
+        }
+        setFile(file);
     };
 
     const handleUpload = async () => {
@@ -46,14 +207,17 @@ export default function Home() {
         setPrologue("");
         setConstructiveCriticism("");
         setDownloadLink(null);
+        setProcessingLogs([]);
         
         // Start progress animation
         setProgress(0);
         setAnalysisStage("Uploading file...");
+        setProcessingLogs(prev => [...prev, "Starting analysis..."]);
         const progressInterval = setInterval(() => {
             setProgress(prev => {
                 if (prev >= 90) {
                     clearInterval(progressInterval);
+                    setShowAnalysisOverlay(true);
                     return 90;
                 }
                 return prev + 10;
@@ -89,6 +253,13 @@ export default function Home() {
             setProgress(100);
             setAnalysisStage("Analysis complete!");
             
+            // Update processing logs with chunk status
+            if (data.chunkStatus) {
+                data.chunkStatus.forEach((status: { chunk: number; status: string; message: string }) => {
+                    setProcessingLogs(prev => [...prev, status.message]);
+                });
+            }
+            
             if (data.analysis) {
                 // Handle full analysis response
                 setAnalysis(data.analysis);
@@ -100,18 +271,23 @@ export default function Home() {
                 // Handle simplified test response
                 setAnalysis([{
                     Parameter: "File Upload",
-                    Score: 5, // Use 5 for the maximum score on our scale
+                    Score: 5,
                     Justification: `File successfully uploaded: ${data.fileName || file.name} (${data.fileSize || file.size} bytes)`
                 }]);
             } else {
                 throw new Error("Invalid response format");
             }
+            
+            // Hide overlay when complete
+            setShowAnalysisOverlay(false);
         } catch (error) {
             console.error("Error:", error);
             clearInterval(progressInterval);
             setProgress(100);
             setAnalysisStage("Analysis failed!");
+            setProcessingLogs(prev => [...prev, `Error: ${error}`]);
             alert(`Analysis failed! ${error}`);
+            setShowAnalysisOverlay(false);
         } finally {
             setLoading(false);
         }
@@ -131,21 +307,25 @@ export default function Home() {
     const columns = [
         { title: "Parameter", dataIndex: "Parameter", key: "Parameter" },
         { title: "Score", dataIndex: "Score", key: "Score", align: "center" as const,
-          render: (score: number) => (
-            <div>
-              <Progress 
-                type="circle" 
-                percent={score * 20} 
-                width={50} 
-                format={() => score} 
-                strokeColor={
-                  score >= 4 ? '#52c41a' : // Green for high scores (4-5)
-                  score >= 3 ? '#faad14' : // Yellow for medium scores (3)
-                  '#f5222d'                // Red for low scores (1-2)
-                }
-              />
-            </div>
-          )
+          render: (score: number) => {
+            // Scale down score if it's out of 10
+            const scaledScore = score > 5 ? score / 2 : score;
+            return (
+              <div>
+                <Progress 
+                  type="circle" 
+                  percent={scaledScore * 20} 
+                  width={50} 
+                  format={() => scaledScore.toFixed(1)} 
+                  strokeColor={
+                    scaledScore >= 4 ? '#52c41a' : // Green for high scores (4-5)
+                    scaledScore >= 3 ? '#faad14' : // Yellow for medium scores (3)
+                    '#f5222d'                // Red for low scores (1-2)
+                  }
+                />
+              </div>
+            );
+          }
         },
         { title: "Justification", dataIndex: "Justification", key: "Justification" },
     ];
@@ -156,334 +336,364 @@ export default function Home() {
         if (!analysisData || analysisData.length === 0 || analysisData[0]?.Parameter === "Analysis Failed") {
             return {
                 totalScore: 0,
-                maxPossibleScore: 0,
+                maxPossibleScore: 5,
                 percentage: 0,
                 strengths: [],
-                improvements: []
+                improvements: [],
+                analysis: [], // Added for PDF/DOCX generation
+                summary: ""   // Added for PDF generation
             };
         }
 
-        // Calculate total score
-        const totalScore = analysisData.reduce((sum, item) => sum + (item.Score || 0), 0);
+        // Calculate total score, scaling down scores that are out of 10
+        const totalScore = analysisData.reduce((sum, item) => {
+            const scaledScore = item.Score > 5 ? item.Score / 2 : item.Score;
+            return sum + (scaledScore || 0);
+        }, 0);
+        
         const maxPossibleScore = analysisData.length * 5; // 5 is max score per item
-        const percentage = Math.round((totalScore / maxPossibleScore) * 100);
+        
+        // Normalize the score to be out of 5, ensuring it doesn't exceed 5
+        const normalizedScore = Math.min(5, (totalScore / maxPossibleScore) * 5);
+        const percentage = Math.round((normalizedScore / 5) * 100);
         
         // Identify strengths (high scores) and areas for improvement (low scores)
         const strengths = analysisData
-            .filter(item => item.Score >= 4)
+            .filter(item => {
+                const scaledScore = item.Score > 5 ? item.Score / 2 : item.Score;
+                return scaledScore >= 4;
+            })
             .map(item => item.Parameter);
             
         const improvements = analysisData
-            .filter(item => item.Score <= 2)
+            .filter(item => {
+                const scaledScore = item.Score > 5 ? item.Score / 2 : item.Score;
+                return scaledScore <= 2;
+            })
             .map(item => ({
                 area: item.Parameter,
-                score: item.Score,
+                score: item.Score > 5 ? item.Score / 2 : item.Score,
                 justification: item.Justification
             }));
             
-        return { totalScore, maxPossibleScore, percentage, strengths, improvements };
+        return { 
+            totalScore: Number(normalizedScore.toFixed(1)), // Round to 1 decimal place
+            maxPossibleScore: 5, // Always out of 5
+            percentage, 
+            strengths, 
+            improvements,
+            analysis: analysisData, // Added for PDF/DOCX generation
+            summary: summary        // Added for PDF generation
+        };
     };
 
     const results = calculateResults(analysis);
 
-    // Generate a PDF using window.open for more reliable downloading
+    // Function to generate PDF from UI screenshots
     const generatePdf = async () => {
         try {
             setCapturingPdf(true);
             
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: 'a4',
-            });
+            // Wait for rendering
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
-            const fileTitle = file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis";
-            const dateString = new Date().toLocaleDateString();
-            
-            // Title page
-            pdf.setFontSize(22);
-            pdf.setTextColor(24, 144, 255);
-            pdf.text("eBook AI Analysis Report", 20, 30, { align: 'center' });
-            
-            // Filename
-            pdf.setFontSize(14);
-            pdf.text(`File: ${fileTitle}`, 20, 50);
-            
-            // Date
-            pdf.setFontSize(12);
-            pdf.setTextColor(100, 100, 100);
-            pdf.text(`Generated: ${dateString}`, 20, 60);
-            
-            // Overall score
-            pdf.setFontSize(16);
-            pdf.setTextColor(0, 0, 0);
-            pdf.text(`Overall Score: ${results.totalScore}/${results.maxPossibleScore} (${results.percentage}%)`, 20, 80);
-            
-            // Strengths
-            if (results.strengths.length > 0) {
-                pdf.setFontSize(14);
-                pdf.setTextColor(46, 184, 46); // Green
-                pdf.text("Strengths:", 20, 100);
-                
-                let y = 110;
-                results.strengths.forEach((strength, index) => {
-                    pdf.setFontSize(12);
-                    pdf.text(`• ${strength}`, 25, y);
-                    y += 10;
-                });
-            }
-            
-            // Add a new page
-            pdf.addPage();
-            
-            // Analysis Table
-            pdf.setFontSize(16);
-            pdf.setTextColor(24, 144, 255);
-            pdf.text("Detailed Analysis", 20, 20);
-            
-            let y = 30;
-            analysis.forEach((item, index) => {
-                // Parameter name
-                pdf.setFontSize(14);
-                pdf.setTextColor(0, 0, 0);
-                pdf.text(`${index + 1}. ${item.Parameter}`, 20, y);
-                y += 7;
-                
-                // Score
-                pdf.setFontSize(12);
-                pdf.text(`Score: ${item.Score}/5`, 25, y);
-                y += 7;
-                
-                // Justification
-                pdf.setFontSize(10);
-                const justLines = pdf.splitTextToSize(item.Justification, 170);
-                justLines.forEach(line => {
-                    pdf.text(line, 25, y);
-                    y += 6;
-                });
-                
-                y += 10;
-                
-                // Add new page if needed
-                if (y > 270) {
-                    pdf.addPage();
-                    y = 20;
-                }
-            });
-            
-            // Add another page for summary if available
-            if (summary) {
-                pdf.addPage();
-                pdf.setFontSize(16);
-                pdf.setTextColor(24, 144, 255);
-                pdf.text("Book Summary", 20, 20);
-                
-                pdf.setFontSize(12);
-                pdf.setTextColor(0, 0, 0);
-                const summaryLines = pdf.splitTextToSize(summary, 170);
-                let y = 30;
-                summaryLines.forEach(line => {
-                    pdf.text(line, 20, y);
-                    y += 6;
-                });
-            }
-            
-            // Add editorial feedback if available
-            if (constructiveCriticism) {
-                pdf.addPage();
-                pdf.setFontSize(16);
-                pdf.setTextColor(250, 140, 22);
-                pdf.text("Editorial Feedback", 20, 20);
-                
-                pdf.setFontSize(12);
-                pdf.setTextColor(0, 0, 0);
-                const criticismLines = pdf.splitTextToSize(constructiveCriticism, 170);
-                let y = 30;
-                criticismLines.forEach(line => {
-                    pdf.text(line, 20, y);
-                    y += 6;
-                    
-                    if (y > 270) {
-                        pdf.addPage();
-                        y = 20;
-                    }
-                });
-            }
-            
-            // Footer on all pages
-            const pageCount = pdf.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                pdf.setPage(i);
-                pdf.setFontSize(10);
-                pdf.setTextColor(150, 150, 150);
-                pdf.text(`Page ${i} of ${pageCount}`, 20, 285);
-                pdf.text(`eBook AI Analyzer Report`, 105, 285, { align: 'center' });
-            }
-            
-            // Force the PDF to download
-            const pdfOutput = pdf.output('datauristring');
-            const pdfFilename = `${fileTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_analysis.pdf`;
-            
-            // Create a download link and click it programmatically
-            const downloadLink = document.createElement('a');
-            downloadLink.href = pdfOutput;
-            downloadLink.download = pdfFilename;
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
-            
-            setPdfSuccess(true);
-            setTimeout(() => setPdfSuccess(false), 5000);
-        } catch (error) {
-            console.error("PDF generation error:", error);
-            alert("PDF generation failed. Trying simple version...");
-            generateSimplePdf();
-        } finally {
-            setCapturingPdf(false);
-        }
-    };
-
-    // Improved simple text-only PDF generation for better download handling
-    const generateSimplePdf = () => {
-        try {
+            // Create PDF in A4 portrait mode
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'mm',
                 format: 'a4'
             });
             
-            const fileTitle = file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis";
+            // A4 dimensions
+            const a4Width = 210;
+            const a4Height = 297;
+            const margin = 10;
             
-            // Add title
-            pdf.setFontSize(16);
-            pdf.setTextColor(24, 144, 255);
-            const title = `AI Analysis Report: ${fileTitle}`;
-            pdf.text(title, 10, 15);
-            
-            // Add date
-            pdf.setFontSize(10);
-            pdf.setTextColor(100, 100, 100);
-            pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 10, 25);
-            
-            // Add editorial assessment if available
-            if (constructiveCriticism) {
-                pdf.setFontSize(14);
-                pdf.setTextColor(250, 140, 22);
-                pdf.text('Editorial Assessment', 10, 35);
-                
-                // Split criticism into lines
-                const criticismLines = constructiveCriticism.split('\n');
-                let y = 45;
-                pdf.setFontSize(10);
-                pdf.setTextColor(0, 0, 0);
-                
-                criticismLines.forEach(line => {
-                    if (line.trim() === '') return; // Skip empty lines
-                    
-                    const splitLines = pdf.splitTextToSize(line, 180);
-                    if (!splitLines || splitLines.length === 0) return;
-                    
-                    splitLines.forEach(splitLine => {
-                        pdf.text(splitLine, 10, y);
-                        y += 5;
-                        if (y > 280) {
-                            pdf.addPage();
-                            y = 20;
-                        }
-                    });
-                    y += 5;
-                });
-                
-                pdf.addPage();
-                y = 20;
+            // Capture the analysis content
+            const analysisContent = analysisContentRef.current;
+            if (!analysisContent) {
+                throw new Error("Analysis content not found");
             }
             
-            // Add analysis results
-            pdf.setFontSize(14);
-            pdf.setTextColor(24, 144, 255);
-            pdf.text('Analysis Results', 10, 20);
-            
-            let y = 30;
-            analysis.forEach((item, index) => {
-                if (!item || !item.Parameter) return; // Skip invalid items
-                
-                pdf.setFontSize(12);
-                pdf.setTextColor(0, 0, 0);
-                pdf.text(`${index + 1}. ${item.Parameter}: Score ${item.Score}/5`, 10, y);
-                y += 7;
-                
-                if (item.Justification) {
-                    pdf.setFontSize(10);
-                    try {
-                        const justLines = pdf.splitTextToSize(item.Justification, 180);
-                        if (justLines && justLines.length > 0) {
-                            justLines.forEach(line => {
-                                pdf.text(line, 15, y);
-                                y += 5;
-                            });
-                        }
-                    } catch (e) {
-                        console.error("Error splitting text:", e);
-                    }
-                }
-                
-                y += 5;
-                
-                if (y > 280) {
-                    pdf.addPage();
-                    y = 20;
-                }
+            // Capture the entire analysis as an image
+            const canvas = await html2canvas(analysisContent, {
+                scale: 2,
+                backgroundColor: '#ffffff'
             });
             
-            // Add summary
-            if (summary) {
-                if (y > 240) {
-                    pdf.addPage();
-                    y = 20;
-                }
-                
-                pdf.setFontSize(14);
-                pdf.setTextColor(24, 144, 255);
-                pdf.text('Book Summary', 10, y);
-                y += 10;
-                
-                pdf.setFontSize(10);
-                pdf.setTextColor(0, 0, 0);
-                
-                try {
-                    const summaryLines = pdf.splitTextToSize(summary, 180);
-                    if (summaryLines && summaryLines.length > 0) {
-                        summaryLines.forEach(line => {
-                            pdf.text(line, 10, y);
-                            y += 5;
-                            if (y > 280) {
-                                pdf.addPage();
-                                y = 20;
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.error("Error splitting summary text:", e);
-                }
-            }
+            // Get image data
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
             
-            // Add footer to all pages
-            const pageCount = pdf.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                pdf.setPage(i);
-                pdf.setFontSize(8);
-                pdf.setTextColor(150, 150, 150);
-                pdf.text(`eBook AI Analyzer Report - Page ${i} of ${pageCount}`, 10, 290);
-            }
+            // Calculate dimensions
+            const imgWidth = a4Width - (margin * 2);
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
             
-            // Save the PDF with immediate download
-            const pdfFileName = `${fileTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_analysis_text.pdf`;
-            console.log("Saving text PDF:", pdfFileName);
-            pdf.save(pdfFileName);
-            return true;
+            // Add sections to PDF
+            const sections = [
+                { title: "eBook AI Analysis Report", content: `File: ${file?.name || "eBook Analysis"}\nGenerated: ${new Date().toLocaleDateString()}` },
+                { title: "Book Summary", content: summary },
+                { title: "Compelling Prologue", content: prologue },
+                { title: "Overall Assessment", content: `Overall Score: ${results.totalScore}/5\nStrengths: ${results.strengths.join(", ")}\nAreas for Improvement: ${results.improvements.map(item => item.area).join(", ")}` },
+                { title: "Detailed Analysis", content: imgData } // This will be handled separately
+            ];
+
+            // Add each section to the PDF
+            for (const section of sections) {
+                pdf.addPage();
+                pdf.setFontSize(16);
+                pdf.text(section.title, margin, margin);
+                pdf.setFontSize(12);
+                pdf.text(section.content, margin, margin + 10);
+            }
+
+            // Handle the detailed analysis table separately
+            const analysisData = results.analysis || [];
+            const rowsPerPage = Math.floor((a4Height - (margin * 2)) / 10); // Adjust based on your row height
+            const totalPages = Math.ceil(analysisData.length / rowsPerPage);
+
+            for (let i = 0; i < totalPages; i++) {
+                if (i > 0) {
+                    pdf.addPage(); // Add a new page for each slice
+                }
+
+                const startRow = i * rowsPerPage;
+                const endRow = Math.min(startRow + rowsPerPage, analysisData.length);
+                const pageData = analysisData.slice(startRow, endRow);
+
+                // Add table header
+                pdf.setFontSize(12);
+                pdf.text("Parameter", margin, margin + 10);
+                pdf.text("Score", margin + 60, margin + 10);
+                pdf.text("Analysis", margin + 100, margin + 10);
+
+                // Add table rows
+                pageData.forEach((item, index) => {
+                    const rowY = margin + 20 + (index * 10);
+                    pdf.text(item.parameter, margin, rowY);
+                    pdf.text(`${item.score}/5`, margin + 60, rowY);
+                    pdf.text(item.analysis, margin + 100, rowY);
+                });
+            }
+
+            // Save the PDF
+            const pdfFilename = `${file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis"}_analysis_report.pdf`;
+            pdf.save(pdfFilename);
+            
+            setPdfSuccess(true);
+            setTimeout(() => setPdfSuccess(false), 5000);
         } catch (error) {
-            console.error("Fallback PDF generation failed:", error);
-            return false;
+            console.error("PDF generation error:", error);
+            alert(`PDF generation failed: ${error.message}. Please try again.`);
+        } finally {
+            setCapturingPdf(false);
+        }
+    };
+
+    // Simple fallback function if needed
+    const generateSimplePdf = () => {
+        try {
+            const pdf = new jsPDF();
+            pdf.setFontSize(16);
+            pdf.text("Analysis Report", 20, 20);
+            
+            if (results?.summary) {
+                pdf.setFontSize(12);
+                pdf.text("Summary:", 20, 30);
+                const splitText = pdf.splitTextToSize(results.summary, 170);
+                pdf.text(splitText, 20, 40);
+            }
+            
+            const pdfFilename = `${file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis"}_simple_report.pdf`;
+            pdf.save(pdfFilename);
+        } catch (error) {
+            console.error("Simple PDF generation failed:", error);
+            alert("Unable to generate PDF. Please try again later.");
+        }
+    };
+
+    // Function to generate DOCX from analysis data
+    const generateDocx = async () => {
+        try {
+            setCapturingPdf(true);
+            
+            // Simple solution for reliable Word document generation:
+            // Use the Table UI component to generate a properly formatted table and convert to a document
+            
+            // Prepare a document structure that mirrors our UI
+            let docContent = '';
+            
+            // Title and document info
+            docContent += `<h1 style="color:#1890ff; margin-bottom:20px">eBook AI Analysis Report</h1>\n`;
+            docContent += `<p><b>File:</b> ${file?.name || "eBook Analysis"}</p>\n`;
+            docContent += `<p><b>Generated:</b> ${new Date().toLocaleDateString()}</p>\n\n`;
+            
+            // Book Summary section
+            if (summary) {
+                docContent += `<h2 style="margin-top:30px; color:#333">Book Summary</h2>\n`;
+                docContent += `<p>${summary}</p>\n\n`;
+            }
+            
+            // Prologue section
+            if (prologue) {
+                docContent += `<h2 style="margin-top:30px; color:#333">Compelling Prologue</h2>\n`;
+                docContent += `<p style="font-style:italic">${prologue}</p>\n\n`;
+            }
+            
+            // Overall Assessment section
+            docContent += `<h2 style="margin-top:30px; color:#333">Overall Assessment</h2>\n`;
+            
+            // Overall score with appropriate color
+            let scoreColor = "#f5222d"; // Default red for low scores
+            if (results.percentage >= 80) scoreColor = "#52c41a"; // Green
+            else if (results.percentage >= 60) scoreColor = "#faad14"; // Yellow
+            
+            docContent += `<p><b>Overall Score:</b> <span style="color:${scoreColor}; font-weight:bold">${results.totalScore}/5</span></p>\n\n`;
+            
+            // Strengths section
+            docContent += `<h3 style="margin-top:20px">Strengths</h3>\n`;
+            docContent += `<ul>\n`;
+            results.strengths.forEach(strength => {
+                docContent += `  <li>${strength}</li>\n`;
+            });
+            docContent += `</ul>\n\n`;
+            
+            // Areas for improvement section
+            docContent += `<h3 style="margin-top:20px">Areas for Improvement</h3>\n`;
+            docContent += `<ul>\n`;
+            results.improvements.forEach(item => {
+                docContent += `  <li><b>${item.area}</b> (Score: ${item.score}/5): ${item.justification}</li>\n`;
+            });
+            docContent += `</ul>\n\n`;
+            
+            // Score interpretation
+            let scoreCategory = "Needs Improvement";
+            let scoreDescription = "This eBook requires significant improvements in multiple areas.";
+            
+            if (results.percentage >= 80) {
+                scoreCategory = "Excellent";
+                scoreDescription = "This eBook demonstrates exceptional quality across most parameters.";
+            } else if (results.percentage >= 60) {
+                scoreCategory = "Good";
+                scoreDescription = "This eBook has good overall quality with some areas for improvement.";
+            } else if (results.percentage >= 40) {
+                scoreCategory = "Average";
+                scoreDescription = "This eBook meets basic standards but has several areas that need attention.";
+            }
+            
+            docContent += `<div style="margin:20px 0; padding:15px; border:1px solid ${scoreColor}; background-color:${scoreColor}10">\n`;
+            docContent += `  <h4 style="color:${scoreColor}">${scoreCategory}</h4>\n`;
+            docContent += `  <p>${scoreDescription}</p>\n`;
+            docContent += `</div>\n\n`;
+            
+            // Extra guidance for low scores
+            if (results.percentage < 40) {
+                docContent += `<h3 style="margin-top:20px">General Improvement Suggestions</h3>\n`;
+                docContent += `<ul>\n`;
+                docContent += `  <li>Consider having the text professionally edited to improve readability and flow.</li>\n`;
+                docContent += `  <li>Check for grammatical errors and typos throughout the document.</li>\n`;
+                docContent += `  <li>Work on improving the structure with clear chapter divisions and sections.</li>\n`;
+                docContent += `  <li>Ensure formatting is consistent throughout the book.</li>\n`;
+                docContent += `  <li>Consider adding more original insights or examples to enhance content value.</li>\n`;
+                docContent += `</ul>\n\n`;
+            }
+            
+            // Detailed Analysis section - create a proper HTML table
+            docContent += `<h2 style="margin-top:30px; color:#333">Detailed Analysis</h2>\n`;
+            docContent += `<table style="width:100%; border-collapse:collapse; margin-top:20px">\n`;
+            docContent += `  <tr style="background-color:#f5f5f5">\n`;
+            docContent += `    <th style="padding:8px; border:1px solid #ddd; text-align:left; font-weight:bold">Parameter</th>\n`;
+            docContent += `    <th style="padding:8px; border:1px solid #ddd; text-align:center; font-weight:bold">Score</th>\n`;
+            docContent += `    <th style="padding:8px; border:1px solid #ddd; text-align:left; font-weight:bold">Analysis</th>\n`;
+            docContent += `  </tr>\n`;
+            
+            // Add all analysis rows
+            analysis.forEach(item => {
+                const score = item.Score > 5 ? item.Score / 2 : item.Score;
+                let rowScoreColor = "#f5222d"; // Red for low scores
+                
+                if (score >= 4) rowScoreColor = "#52c41a"; // Green for high scores
+                else if (score >= 3) rowScoreColor = "#faad14"; // Yellow for medium scores
+                
+                docContent += `  <tr>\n`;
+                docContent += `    <td style="padding:8px; border:1px solid #ddd">${item.Parameter}</td>\n`;
+                docContent += `    <td style="padding:8px; border:1px solid #ddd; text-align:center"><span style="color:${rowScoreColor}; font-weight:bold">${item.Score}/5</span></td>\n`;
+                docContent += `    <td style="padding:8px; border:1px solid #ddd">${item.Justification}</td>\n`;
+                docContent += `  </tr>\n`;
+            });
+            
+            docContent += `</table>\n`;
+            
+            // Add footer
+            docContent += `<p style="margin-top:30px; text-align:center; color:#999; font-size:12px">eBook AI Analyzer ©${new Date().getFullYear()} - Powered by Next.js and OpenAI</p>\n`;
+            
+            // Convert to an MS Word document using HTML formatting
+            const docType = 'data:application/vnd.ms-word;charset=utf-8';
+            const htmlDocument = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+                <head>
+                    <meta charset="utf-8">
+                    <title>eBook AI Analysis Report</title>
+                    <!--[if gte mso 9]>
+                    <xml>
+                        <w:WordDocument>
+                            <w:View>Print</w:View>
+                            <w:Zoom>100</w:Zoom>
+                            <w:DoNotOptimizeForBrowser/>
+                        </w:WordDocument>
+                    </xml>
+                    <![endif]-->
+                    <style>
+                        /* Base document styles */
+                        body {
+                            font-family: 'Segoe UI', Arial, sans-serif;
+                            margin: 40px;
+                            line-height: 1.5;
+                            color: #333;
+                        }
+                        h1 { font-size: 24pt; margin-bottom: 24pt; color: #1890ff; }
+                        h2 { font-size: 18pt; margin-top: 18pt; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5pt; }
+                        h3 { font-size: 14pt; margin-top: 14pt; color: #333; }
+                        h4 { font-size: 12pt; margin-top: 12pt; margin-bottom: 6pt; }
+                        p { margin: 10pt 0; }
+                        table { width: 100%; border-collapse: collapse; margin: 15pt 0; }
+                        th { background-color: #f5f5f5; font-weight: bold; text-align: left; padding: 8pt; border: 1px solid #ddd; }
+                        td { padding: 8pt; border: 1px solid #ddd; vertical-align: top; }
+                        ul, ol { margin: 10pt 0; padding-left: 20pt; }
+                        li { margin-bottom: 5pt; }
+                        
+                        /* Custom styling to match UI */
+                        .score-high { color: #52c41a; font-weight: bold; }
+                        .score-medium { color: #faad14; font-weight: bold; }
+                        .score-low { color: #f5222d; font-weight: bold; }
+                        .summary { margin-bottom: 15pt; }
+                        .prologue { font-style: italic; margin-bottom: 15pt; }
+                        .alert { border: 1px solid #ddd; padding: 10pt; margin: 15pt 0; }
+                        .alert-success { border-color: #b7eb8f; background-color: #f6ffed; }
+                        .alert-info { border-color: #91d5ff; background-color: #e6f7ff; }
+                        .alert-warning { border-color: #ffe58f; background-color: #fffbe6; }
+                        .alert-error { border-color: #ffa39e; background-color: #fff1f0; }
+                        .center { text-align: center; }
+                    </style>
+                </head>
+                <body>
+                    ${docContent}
+                </body>
+                </html>
+            `;
+            
+            // Create a Blob from the HTML content
+            const blob = new Blob([htmlDocument], { type: docType });
+            
+            // Save the file with a .doc extension
+            saveAs(blob, `${file?.name?.replace(/\.pdf$/i, '') || "eBook Analysis"}_analysis_report.doc`);
+            
+            setPdfSuccess(true);
+            setTimeout(() => setPdfSuccess(false), 5000);
+        } catch (error) {
+            console.error("DOCX generation error:", error);
+            alert(`DOCX generation failed: ${error.message}. Please try again.`);
+        } finally {
+            setCapturingPdf(false);
         }
     };
 
@@ -521,15 +731,19 @@ export default function Home() {
                                 borderRadius: '8px'
                             }}
                         >
-                            <Upload 
-                                beforeUpload={(file) => {
-                                    setFile(file); // Set the file state
-                                    return false; // Prevent automatic upload
-                                }} 
-                                onChange={handleFileChange} 
-                                accept="application/pdf"
-                                maxCount={1}
+                            <Upload
+                                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                 showUploadList={true}
+                                maxCount={1}
+                                beforeUpload={(file) => {
+                                    const isValidType = file.type === 'application/pdf' || 
+                                                      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                    if (!isValidType) {
+                                        message.error('Please upload a PDF or DOCX file');
+                                    }
+                                    return false;
+                                }}
+                                onChange={handleFileChange}
                             >
                                 <Button 
                                     icon={<UploadOutlined />} 
@@ -538,7 +752,7 @@ export default function Home() {
                                     className={!file ? "pulse" : ""}
                                     style={{ width: '100%', height: '50px' }}
                                 >
-                                    Click to Upload PDF
+                                    Click to Upload PDF or DOCX
                                 </Button>
                             </Upload>
                             
@@ -562,6 +776,32 @@ export default function Home() {
                                 <div style={{ marginTop: '20px', textAlign: 'center' }}>
                                     <Progress percent={progress} status="active" />
                                     <p style={{ marginTop: '10px', color: '#1890ff' }}>{analysisStage}</p>
+                                    
+                                    {/* Processing Logs Section */}
+                                    <div style={{ 
+                                        marginTop: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#f5f5f5',
+                                        borderRadius: '4px',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        textAlign: 'left'
+                                    }}>
+                                        <h4 style={{ marginBottom: '8px', color: '#1890ff' }}>Processing Logs:</h4>
+                                        {processingLogs.map((log, index) => (
+                                            <div 
+                                                key={index}
+                                                style={{ 
+                                                    padding: '4px 0',
+                                                    fontSize: '14px',
+                                                    color: '#666',
+                                                    borderBottom: index < processingLogs.length - 1 ? '1px solid #eee' : 'none'
+                                                }}
+                                            >
+                                                {log}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                             
@@ -582,12 +822,12 @@ export default function Home() {
 
                 {analysis?.length > 0 && (
                     <>
-                        {/* Generate PDF Report Button */}
+                        {/* Generate DOCX Report Button */}
                         <Row justify="center" style={{ marginTop: '20px' }}>
                             <Button 
                                 type="primary"
                                 icon={<FilePdfOutlined />}
-                                onClick={generatePdf}
+                                onClick={generateDocx}
                                 loading={capturingPdf}
                                 size="large"
                                 className="pdf-button"
@@ -598,7 +838,7 @@ export default function Home() {
                                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                                 }}
                             >
-                                {capturingPdf ? 'Generating PDF Report...' : 'Generate PDF Report with UI Screenshot'}
+                                Generate Analysis Report (DOCX)
                             </Button>
                             
                             <Button 
@@ -612,13 +852,13 @@ export default function Home() {
                                     padding: '8px 15px',
                                 }}
                             >
-                                Text-Only PDF
+                                Text-Only Report
                             </Button>
                             
                             {pdfSuccess && (
                                 <Alert
-                                    message="PDF Report Generated Successfully"
-                                    description="Your PDF has been saved to your downloads folder."
+                                    message="DOCX Report Generated Successfully"
+                                    description="Your DOCX has been saved to your downloads folder."
                                     type="success"
                                     showIcon
                                     closable
@@ -678,16 +918,32 @@ export default function Home() {
                                             
                                             <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
                                                 {constructiveCriticism.split('\n').slice(1).map((paragraph, i) => {
-                                                    // Highlight suggestions and recommendations with special formatting
-                                                    const enhancedText = paragraph
-                                                        .replace(/should consider|recommend|could improve|suggest|try to|focus on|needs to|must|important to|enhance|revise|develop|strengthen|add|remove|modify|prioritize/gi, match => 
-                                                            `<span class="highlight-tip">${match}</span>`);
+                                                    // Split the paragraph into words and wrap suggestions in spans
+                                                    const words = paragraph.split(/(\s+)/);
+                                                    const suggestionWords = [
+                                                        'should consider', 'recommend', 'could improve', 'suggest',
+                                                        'try to', 'focus on', 'needs to', 'must', 'important to',
+                                                        'enhance', 'revise', 'develop', 'strengthen', 'add',
+                                                        'remove', 'modify', 'prioritize'
+                                                    ];
                                                     
                                                     return (
                                                         <div className="feedback-entry" key={i}>
-                                                            <Paragraph
-                                                                dangerouslySetInnerHTML={{ __html: enhancedText }}
-                                                            />
+                                                            <Paragraph>
+                                                                {words.map((word, j) => {
+                                                                    const isSuggestion = suggestionWords.some(suggestion => 
+                                                                        word.toLowerCase().includes(suggestion)
+                                                                    );
+                                                                    return (
+                                                                        <span 
+                                                                            key={j}
+                                                                            className={isSuggestion ? "highlight-tip" : ""}
+                                                                        >
+                                                                            {word}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </Paragraph>
                                                         </div>
                                                     );
                                                 })}
@@ -900,6 +1156,162 @@ export default function Home() {
             <Footer style={{ textAlign: 'center', background: '#f0f2f5' }}>
                 eBook AI Analyzer ©{new Date().getFullYear()} - Powered by Next.js and OpenAI
             </Footer>
+
+            {/* Add the Analysis Overlay */}
+            {showAnalysisOverlay && (
+                <div className="analysis-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1000,
+                    backdropFilter: 'blur(5px)'
+                }}>
+                    <div className="analysis-content" style={{
+                        textAlign: 'center',
+                        padding: '30px',
+                        borderRadius: '15px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                        maxWidth: '500px',
+                        width: '90%'
+                    }}>
+                        <div className="book-analysis-animation" style={{
+                            position: 'relative',
+                            width: '200px',
+                            height: '200px',
+                            margin: '0 auto'
+                        }}>
+                            <div className="book" style={{
+                                position: 'absolute',
+                                width: '100px',
+                                height: '150px',
+                                background: '#2c3e50',
+                                borderRadius: '5px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                animation: 'bookFloat 3s ease-in-out infinite'
+                            }}>
+                                <div className="book-pages" style={{
+                                    position: 'absolute',
+                                    top: '5px',
+                                    left: '5px',
+                                    right: '5px',
+                                    bottom: '5px',
+                                    background: '#fff',
+                                    border: '1px solid #ddd',
+                                    animation: 'pageTurn 2s ease-in-out infinite'
+                                }}></div>
+                            </div>
+                            <div className="analyst" style={{
+                                position: 'absolute',
+                                width: '60px',
+                                height: '80px',
+                                bottom: '0',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                animation: 'analystThink 2s ease-in-out infinite'
+                            }}>
+                                <div className="head" style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    background: '#fff',
+                                    borderRadius: '50%',
+                                    position: 'absolute',
+                                    top: '0',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)'
+                                }}>
+                                    <div className="face" style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%'
+                                    }}>
+                                        <div className="eyes" style={{
+                                            position: 'absolute',
+                                            top: '30%',
+                                            width: '100%',
+                                            height: '4px',
+                                            background: '#333',
+                                            animation: 'blink 3s ease-in-out infinite'
+                                        }}></div>
+                                        <div className="mouth" style={{
+                                            position: 'absolute',
+                                            bottom: '20%',
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            width: '20px',
+                                            height: '10px',
+                                            borderBottom: '2px solid #333',
+                                            borderLeft: '2px solid #333',
+                                            borderRight: '2px solid #333',
+                                            borderBottomLeftRadius: '10px',
+                                            borderBottomRightRadius: '10px',
+                                            animation: 'think 2s ease-in-out infinite'
+                                        }}></div>
+                                    </div>
+                                </div>
+                                <div className="body" style={{
+                                    position: 'absolute',
+                                    top: '40px',
+                                    width: '100%',
+                                    height: '40px',
+                                    background: '#1890ff',
+                                    borderRadius: '5px'
+                                }}>
+                                    <div className="arm left" style={{
+                                        position: 'absolute',
+                                        top: '0',
+                                        left: '-20px',
+                                        width: '20px',
+                                        height: '40px',
+                                        background: '#1890ff',
+                                        animation: 'armMove 2s ease-in-out infinite'
+                                    }}>
+                                        <div className="hand" style={{
+                                            position: 'absolute',
+                                            bottom: '0',
+                                            width: '15px',
+                                            height: '15px',
+                                            background: '#fff',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                    </div>
+                                    <div className="arm right" style={{
+                                        position: 'absolute',
+                                        top: '0',
+                                        right: '-20px',
+                                        width: '20px',
+                                        height: '40px',
+                                        background: '#1890ff',
+                                        animation: 'armMove 2s ease-in-out infinite reverse'
+                                    }}>
+                                        <div className="hand" style={{
+                                            position: 'absolute',
+                                            bottom: '0',
+                                            width: '15px',
+                                            height: '15px',
+                                            background: '#fff',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <Typography.Title level={4} style={{ color: '#fff', marginTop: '20px' }}>
+                            Analyzing Your Book
+                        </Typography.Title>
+                        <Typography.Paragraph style={{ color: '#fff' }}>
+                            Our AI is carefully reviewing your content to provide detailed insights...
+                        </Typography.Paragraph>
+                    </div>
+                </div>
+            )}
         </Layout>
     );
 }
