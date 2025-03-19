@@ -1115,10 +1115,10 @@ export default function Home() {
                                                     border: '1px solid rgba(250, 140, 22, 0.2)'
                                                 }}>
                                                     <Typography.Text type="secondary" style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
-                                                        Expert Feedback
+                                                        Professional Editorial Feedback
                                                     </Typography.Text>
                                                     <Typography.Text style={{ fontSize: '16px', display: 'block', color: '#333' }}>
-                                                        This assessment provides professional, actionable feedback to help improve your book's quality and impact. Our AI editorial team has identified key areas for enhancement.
+                                                        Curated recommendations to enhance your book's quality and impact.
                                                     </Typography.Text>
                                                 </div>
                                                 
@@ -1141,7 +1141,7 @@ export default function Home() {
                                                         background: '#fa8c16' 
                                                     }}></div>
                                                     <Title level={5} style={{ color: '#fa8c16', marginTop: 0, position: 'relative' }}>
-                                                        PRIMARY RECOMMENDATION
+                                                        TOP PRIORITY
                                                         <div style={{ 
                                                             position: 'absolute', 
                                                             top: '50%', 
@@ -1154,14 +1154,48 @@ export default function Home() {
                                                             <EditOutlined style={{ fontSize: '30px', color: '#fa8c16' }} />
                                                         </div>
                                                     </Title>
-                                                    <Paragraph style={{ 
-                                                        fontWeight: 500, 
-                                                        fontSize: '16px', 
-                                                        lineHeight: '1.6', 
-                                                        color: '#333',
-                                                        fontStyle: 'italic'
+                                                    
+                                                    <Title level={5} style={{ 
+                                                        marginTop: '15px', 
+                                                        marginBottom: '10px', 
+                                                        fontWeight: '500',
+                                                        color: '#555',
+                                                        fontSize: '15px'
                                                     }}>
-                                                        {constructiveCriticism.split('\n')[0]}
+                                                        EDITOR'S KEY RECOMMENDATION
+                                                    </Title>
+                                                    
+                                                    <Paragraph style={{ 
+                                                        fontWeight: 400, 
+                                                        fontSize: '15px', 
+                                                        lineHeight: '1.6', 
+                                                        color: '#333'
+                                                    }}>
+                                                        {constructiveCriticism.split('\n')[0].split(/(\*\*.*?\*\*)/).map((part, idx) => {
+                                                            // Check if this part is a heading encased in asterisks
+                                                            if (part.startsWith('**') && part.endsWith('**')) {
+                                                                const headingText = part.substring(2, part.length - 2);
+                                                                return (
+                                                                    <span 
+                                                                        key={idx}
+                                                                        style={{
+                                                                            fontWeight: 'bold',
+                                                                            color: '#fa8c16',
+                                                                            padding: '0 2px'
+                                                                        }}
+                                                                    >
+                                                                        {headingText}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            
+                                                            // Regular text
+                                                            return (
+                                                                <span key={idx}>
+                                                                    {part}
+                                                                </span>
+                                                            );
+                                                        })}
                                                     </Paragraph>
                                                 </div>
                                                 
@@ -1180,6 +1214,62 @@ export default function Home() {
                                                     
                                                     <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
                                                         {constructiveCriticism.split('\n').slice(1).map((paragraph, i) => {
+                                                            // Check if paragraph is a numbered point with a heading (e.g., "1. **Copyright Notice**")
+                                                            const numberedHeadingMatch = paragraph.match(/^(\d+)\.\s+\*\*(.*?)\*\*:?(.*)$/);
+                                                            
+                                                            if (numberedHeadingMatch) {
+                                                                const [, number, headingText, remainingText] = numberedHeadingMatch;
+                                                                
+                                                                return (
+                                                                    <div className="feedback-entry" key={i} style={{
+                                                                        marginBottom: '20px',
+                                                                        padding: '15px',
+                                                                        background: 'white',
+                                                                        borderRadius: '8px',
+                                                                        border: '1px solid #f0f0f0',
+                                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                                                                    }}>
+                                                                        <div style={{ 
+                                                                            display: 'flex', 
+                                                                            alignItems: 'center', 
+                                                                            marginBottom: '12px'
+                                                                        }}>
+                                                                            <div style={{ 
+                                                                                width: '28px',
+                                                                                height: '28px',
+                                                                                borderRadius: '50%',
+                                                                                background: 'rgba(250, 140, 22, 0.1)',
+                                                                                color: '#fa8c16',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                fontWeight: 'bold',
+                                                                                marginRight: '10px'
+                                                                            }}>
+                                                                                {number}
+                                                                            </div>
+                                                                            <h4 style={{ 
+                                                                                margin: '0',
+                                                                                fontSize: '16px',
+                                                                                fontWeight: 'bold',
+                                                                                color: '#fa8c16'
+                                                                            }}>
+                                                                                {headingText}
+                                                                            </h4>
+                                                                        </div>
+                                                                        
+                                                                        <Paragraph style={{ 
+                                                                            margin: '0 0 0 38px',
+                                                                            fontSize: '14px',
+                                                                            color: '#555'
+                                                                        }}>
+                                                                            {remainingText}
+                                                                        </Paragraph>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            
+                                                            // Handle regular paragraphs or other ** patterns
                                                             // Split the paragraph into words and wrap suggestions in spans
                                                             const words = paragraph.split(/(\s+)/);
                                                             const suggestionWords = [
@@ -1198,6 +1288,28 @@ export default function Home() {
                                                                 }}>
                                                                     <Paragraph style={{ margin: 0 }}>
                                                                         {words.map((word, j) => {
+                                                                            // Check if word contains ** pattern indicating heading
+                                                                            if (word.startsWith('**') && word.endsWith('**')) {
+                                                                                const headingText = word.substring(2, word.length - 2);
+                                                                                return (
+                                                                                    <h4 
+                                                                                        key={j}
+                                                                                        style={{
+                                                                                            margin: '15px 0 8px', 
+                                                                                            color: '#fa8c16', 
+                                                                                            fontSize: '16px', 
+                                                                                            borderBottom: '1px solid #f0f0f0', 
+                                                                                            paddingBottom: '5px',
+                                                                                            fontWeight: 'bold',
+                                                                                            display: 'block',
+                                                                                            width: '100%'
+                                                                                        }}
+                                                                                    >
+                                                                                        {headingText}
+                                                                                    </h4>
+                                                                                );
+                                                                            }
+                                                                            
                                                                             const isSuggestion = suggestionWords.some(suggestion => 
                                                                                 word.toLowerCase().includes(suggestion)
                                                                             );
@@ -1318,6 +1430,60 @@ export default function Home() {
                                                         </Col>
                                                     </Row>
                                                 </div>
+                                                
+                                                {/* Additional Sections - Table of Contents & Introduction */}
+                                                <div style={{ 
+                                                    marginTop: '30px',
+                                                    padding: '20px',
+                                                    background: 'rgba(250, 140, 22, 0.03)',
+                                                    borderRadius: '8px'
+                                                }}>
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <h4 style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: 'bold',
+                                                            color: '#fa8c16',
+                                                            marginBottom: '10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <div style={{ 
+                                                                width: '8px', 
+                                                                height: '8px', 
+                                                                borderRadius: '50%', 
+                                                                background: '#fa8c16', 
+                                                                marginRight: '8px' 
+                                                            }}></div>
+                                                            TABLE OF CONTENTS
+                                                        </h4>
+                                                        <Paragraph style={{ paddingLeft: '16px' }}>
+                                                            While functional, the table of contents could be more engaging. Consider adding titles to the chapters if possible, which can serve as intriguing previews that stimulate interest. If the chapters must remain numerically listed, a brief, thematic subtitle could add a layer of mystery and anticipation.
+                                                        </Paragraph>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <h4 style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: 'bold',
+                                                            color: '#fa8c16',
+                                                            marginBottom: '10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <div style={{ 
+                                                                width: '8px', 
+                                                                height: '8px', 
+                                                                borderRadius: '50%', 
+                                                                background: '#fa8c16', 
+                                                                marginRight: '8px' 
+                                                            }}></div>
+                                                            INTRODUCTION
+                                                        </h4>
+                                                        <Paragraph style={{ paddingLeft: '16px' }}>
+                                                            The introduction promises a deep dive into the complexities of the human mind through the lens of hypnosis. It's beautifully written but stops abruptly. Ensure that this section flows seamlessly into the body of the book, perhaps by ending with a question, a statement of intent, or a brief overview of what the reader can expect to discover within the pages.
+                                                        </Paragraph>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </Card>
                                     </Col>
@@ -1345,31 +1511,172 @@ export default function Home() {
                                     >
                                         <div ref={analysisContentRef}>
                                             {summary && (
-                                                <div className="book-summary fade-in" style={{ marginBottom: '20px' }}>
+                                                <div className="book-summary fade-in" style={{ marginBottom: '30px' }}>
                                                     <Title level={4}>
                                                         <div style={{ display: 'flex', alignItems: 'center' }}>
                                                             <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
                                                             <span>Book Summary</span>
                                                         </div>
                                                     </Title>
-                                                    <Paragraph style={{ fontSize: '15px', lineHeight: '1.8' }}>
-                                                        {summary}
-                                                    </Paragraph>
+                                                    <div style={{
+                                                        padding: '20px',
+                                                        background: 'linear-gradient(to right, rgba(24, 144, 255, 0.05), rgba(24, 144, 255, 0.01))',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid rgba(24, 144, 255, 0.1)',
+                                                        position: 'relative'
+                                                    }}>
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '10px',
+                                                            right: '10px',
+                                                            fontSize: '24px',
+                                                            color: 'rgba(24, 144, 255, 0.1)'
+                                                        }}>
+                                                            <BookOutlined />
+                                                        </div>
+                                                        {summary.split('\n').map((paragraph, i) => {
+                                                            // Process paragraphs to convert ** to headings
+                                                            if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+                                                                const headingText = paragraph.substring(2, paragraph.length - 2);
+                                                                return (
+                                                                    <div key={i}>
+                                                                        <h4 style={{ 
+                                                                            margin: '15px 0 8px', 
+                                                                            color: '#1890ff', 
+                                                                            fontSize: '16px', 
+                                                                            borderBottom: '1px solid rgba(24, 144, 255, 0.2)', 
+                                                                            paddingBottom: '5px',
+                                                                            fontWeight: 'bold'
+                                                                        }}>
+                                                                            {headingText}
+                                                                        </h4>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            
+                                                            // Check for ** patterns within paragraph
+                                                            const processedText = paragraph.replace(
+                                                                /\*\*(.*?)\*\*/g, 
+                                                                '<h4 style="margin: 15px 0 8px; color: #1890ff; font-size: 16px; border-bottom: 1px solid rgba(24, 144, 255, 0.2); padding-bottom: 5px;">$1</h4>'
+                                                            );
+                                                            
+                                                            if (processedText !== paragraph) {
+                                                                return (
+                                                                    <div 
+                                                                        key={i} 
+                                                                        dangerouslySetInnerHTML={{ __html: processedText }}
+                                                                        style={{ 
+                                                                            marginBottom: i < summary.split('\n').length - 1 ? '16px' : 0,
+                                                                        }}
+                                                                    />
+                                                                );
+                                                            }
+                                                            
+                                                            return (
+                                                                <Paragraph key={i} style={{ 
+                                                                    fontSize: '15px', 
+                                                                    lineHeight: '1.8',
+                                                                    marginBottom: i < summary.split('\n').length - 1 ? '16px' : 0,
+                                                                    textAlign: 'justify'
+                                                                }}>
+                                                                    {paragraph}
+                                                                </Paragraph>
+                                                            );
+                                                        })}
+                                                    </div>
                                                     <Divider />
                                                 </div>
                                             )}
                                             
                                             {prologue && (
-                                                <div className="book-prologue slide-in" style={{ marginBottom: '20px' }}>
+                                                <div className="book-prologue slide-in" style={{ marginBottom: '30px' }}>
                                                     <Title level={4}>
                                                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                            <CommentOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                                                            <span>Compelling Prologue</span>
+                                                            <CommentOutlined style={{ marginRight: 8, color: '#722ed1' }} />
+                                                            <span style={{ color: '#722ed1' }}>Compelling Prologue</span>
                                                         </div>
                                                     </Title>
-                                                    <Paragraph style={{ fontSize: '15px', lineHeight: '1.8', fontStyle: 'italic' }}>
-                                                        {prologue}
-                                                    </Paragraph>
+                                                    <div style={{
+                                                        padding: '25px',
+                                                        background: 'linear-gradient(to right, rgba(114, 46, 209, 0.05), rgba(114, 46, 209, 0.02))',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid rgba(114, 46, 209, 0.1)',
+                                                        position: 'relative',
+                                                        fontFamily: '"Georgia", serif'
+                                                    }}>
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '10px',
+                                                            right: '10px',
+                                                            fontSize: '24px',
+                                                            color: 'rgba(114, 46, 209, 0.1)'
+                                                        }}>
+                                                            <CommentOutlined />
+                                                        </div>
+                                                        <div style={{
+                                                            fontSize: '28px',
+                                                            fontFamily: '"Georgia", serif',
+                                                            lineHeight: '1.5',
+                                                            color: '#722ed1',
+                                                            marginBottom: '15px',
+                                                            fontStyle: 'italic',
+                                                            textAlign: 'center'
+                                                        }}>
+                                                            "{prologue.split(' ').slice(0, 7).join(' ')}..."
+                                                        </div>
+                                                        {prologue.split('\n').map((paragraph, i) => {
+                                                            // Process paragraphs to convert ** to headings
+                                                            if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+                                                                const headingText = paragraph.substring(2, paragraph.length - 2);
+                                                                return (
+                                                                    <div key={i}>
+                                                                        <h4 style={{ 
+                                                                            margin: '15px 0 8px', 
+                                                                            color: '#722ed1', 
+                                                                            fontSize: '17px', 
+                                                                            borderBottom: '1px solid rgba(114, 46, 209, 0.2)', 
+                                                                            paddingBottom: '5px',
+                                                                            fontWeight: 'bold',
+                                                                            fontFamily: '"Georgia", serif',
+                                                                        }}>
+                                                                            {headingText}
+                                                                        </h4>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            
+                                                            // Check for ** patterns within paragraph
+                                                            const processedText = paragraph.replace(
+                                                                /\*\*(.*?)\*\*/g, 
+                                                                '<h4 style="margin: 15px 0 8px; color: #722ed1; font-size: 17px; border-bottom: 1px solid rgba(114, 46, 209, 0.2); padding-bottom: 5px; font-family: Georgia, serif;">$1</h4>'
+                                                            );
+                                                            
+                                                            if (processedText !== paragraph) {
+                                                                return (
+                                                                    <div 
+                                                                        key={i} 
+                                                                        dangerouslySetInnerHTML={{ __html: processedText }}
+                                                                        style={{ 
+                                                                            marginBottom: i < prologue.split('\n').length - 1 ? '16px' : 0,
+                                                                        }}
+                                                                    />
+                                                                );
+                                                            }
+                                                            
+                                                            return (
+                                                                <Paragraph key={i} style={{ 
+                                                                    fontSize: '16px', 
+                                                                    lineHeight: '1.9',
+                                                                    marginBottom: i < prologue.split('\n').length - 1 ? '16px' : 0,
+                                                                    fontStyle: 'italic',
+                                                                    color: '#333',
+                                                                    textAlign: 'justify'
+                                                                }}>
+                                                                    {paragraph}
+                                                                </Paragraph>
+                                                            );
+                                                        })}
+                                                    </div>
                                                     <Divider />
                                                 </div>
                                             )}
@@ -1464,13 +1771,116 @@ export default function Home() {
                                             </div>
                                             
                                             <Title level={4}>Detailed Analysis</Title>
-                                            <Table 
-                                                columns={columns} 
-                                                dataSource={analysis} 
-                                                pagination={false} 
-                                                rowKey="Parameter"
-                                                style={{ marginBottom: '20px' }}
-                                            />
+                                            <div className="parameter-cards-container" style={{ marginBottom: '30px' }}>
+                                                {analysis.map((item, index) => {
+                                                    // Scale down score if it's out of 10
+                                                    const scaledScore = item.Score > 5 ? item.Score / 2 : item.Score;
+                                                    let scoreColor = '#f5222d'; // Red for low scores
+                                                    let bgColor = 'rgba(245, 34, 45, 0.05)';
+                                                    let borderColor = 'rgba(245, 34, 45, 0.2)';
+                                                    
+                                                    if (scaledScore >= 4) {
+                                                        scoreColor = '#52c41a'; // Green for high scores
+                                                        bgColor = 'rgba(82, 196, 26, 0.05)';
+                                                        borderColor = 'rgba(82, 196, 26, 0.2)';
+                                                    } else if (scaledScore >= 3) {
+                                                        scoreColor = '#faad14'; // Yellow for medium scores
+                                                        bgColor = 'rgba(250, 173, 20, 0.05)';
+                                                        borderColor = 'rgba(250, 173, 20, 0.2)';
+                                                    }
+                                                    
+                                                    return (
+                                                        <Card
+                                                            key={index}
+                                                            className="parameter-card"
+                                                            style={{
+                                                                marginBottom: '20px',
+                                                                borderRadius: '12px',
+                                                                overflow: 'hidden',
+                                                                border: `1px solid ${borderColor}`,
+                                                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                                                            }}
+                                                            title={
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center'
+                                                                }}>
+                                                                    <span style={{ 
+                                                                        fontWeight: 'bold',
+                                                                        color: '#333'
+                                                                    }}>
+                                                                        {item.Parameter}
+                                                                    </span>
+                                                                    <div style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '10px'
+                                                                    }}>
+                                                                        <span style={{ 
+                                                                            fontSize: '14px',
+                                                                            color: '#888'
+                                                                        }}>
+                                                                            Score:
+                                                                        </span>
+                                                                        <div style={{
+                                                                            width: '40px',
+                                                                            height: '40px',
+                                                                            borderRadius: '50%',
+                                                                            display: 'flex',
+                                                                            justifyContent: 'center',
+                                                                            alignItems: 'center',
+                                                                            background: bgColor,
+                                                                            border: `2px solid ${scoreColor}`,
+                                                                            color: scoreColor,
+                                                                            fontWeight: 'bold',
+                                                                            fontSize: '16px'
+                                                                        }}>
+                                                                            {scaledScore.toFixed(1)}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                            headStyle={{
+                                                                background: bgColor,
+                                                                borderBottom: `1px solid ${borderColor}`
+                                                            }}
+                                                            bodyStyle={{
+                                                                padding: '20px',
+                                                                background: 'white'
+                                                            }}
+                                                        >
+                                                            <div>
+                                                                {item.Justification.split('\n').map((paragraph, i) => {
+                                                                    // Identify and style key terms, highlights, and bullet points
+                                                                    const processedText = paragraph
+                                                                        // Convert **text** to proper headings
+                                                                        .replace(/\*\*(.*?)\*\*/g, '<h4 style="margin: 15px 0 8px; color: #333; font-size: 16px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">$1</h4>')
+                                                                        .replace(/\*(.*?)\*/g, '<span style="font-style: italic;">$1</span>')
+                                                                        .replace(/- (.*?)(?=\n|$)/g, '<div style="margin-bottom: 8px;"><span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background-color: ' + scoreColor + '; margin-right: 8px; margin-bottom: 2px;"></span>$1</div>')
+                                                                        .replace(/\b(excellent|outstanding|exceptional|remarkable|impressive)\b/gi, '<span style="color: #52c41a; font-weight: 500;">$1</span>')
+                                                                        .replace(/\b(improvement|improve|lacking|weak|limited)\b/gi, '<span style="color: #faad14; font-weight: 500;">$1</span>')
+                                                                        .replace(/\b(poor|inadequate|deficient|problematic|flawed)\b/gi, '<span style="color: #f5222d; font-weight: 500;">$1</span>');
+                                                                    
+                                                                    return (
+                                                                        <div 
+                                                                            key={i}
+                                                                            style={{ 
+                                                                                marginBottom: i < item.Justification.split('\n').length - 1 ? '16px' : 0,
+                                                                                lineHeight: '1.8',
+                                                                                fontSize: '14px',
+                                                                                color: '#555',
+                                                                                textAlign: 'justify'
+                                                                            }}
+                                                                            dangerouslySetInnerHTML={{ __html: processedText }}
+                                                                        />
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </Card>
+                                                    );
+                                                })}
+                                            </div>
 
                                             {downloadLink && (
                                                 <a 
