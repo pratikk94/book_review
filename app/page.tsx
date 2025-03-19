@@ -294,6 +294,21 @@ export default function Home() {
             0%, 100% { transform: translateX(-50%) scaleX(1.2) scaleY(1.2); border-radius: 50%; }
             50% { transform: translateX(-50%) scaleX(1) scaleY(0.8); border-radius: 30%; }
         }
+        @keyframes pageFlip {
+            0% { transform: rotateY(0deg); }
+            20% { transform: rotateY(-180deg); }
+            40% { transform: rotateY(-180deg); }
+            60% { transform: rotateY(0deg); }
+            100% { transform: rotateY(0deg); }
+        }
+        @keyframes scaleIn {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        @keyframes checkmark {
+            0% { height: 0; width: 0; opacity: 0; }
+            100% { height: 40px; width: 20px; opacity: 1; }
+        }
     `;
     
     // Refs for capturing PDF content
@@ -2550,6 +2565,98 @@ export default function Home() {
                     padding: '20px'
                 }}>
                     <div style={{ maxWidth: '600px', textAlign: 'center' }}>
+                        {/* Loader Animation */}
+                        <div className="loader-container" style={{
+                            marginBottom: '30px',
+                            position: 'relative',
+                            width: '120px',
+                            height: '120px',
+                            margin: '0 auto 30px'
+                        }}>
+                            {progress < 100 ? (
+                                <>
+                                    {/* Book Loading Animation */}
+                                    <div className="book-loading" style={{
+                                        position: 'relative',
+                                        width: '100%',
+                                        height: '100%'
+                                    }}>
+                                        <div className="book" style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '80px',
+                                            height: '60px',
+                                            perspective: '1000px'
+                                        }}>
+                                            <div className="page" style={{
+                                                position: 'absolute',
+                                                width: '100%',
+                                                height: '100%',
+                                                border: '2px solid #1890ff',
+                                                borderRadius: '3px',
+                                                transformOrigin: 'left center',
+                                                background: '#fff',
+                                                animation: 'pageFlip 1.5s infinite'
+                                            }}></div>
+                                            <div className="page" style={{
+                                                position: 'absolute',
+                                                width: '100%',
+                                                height: '100%',
+                                                border: '2px solid #1890ff',
+                                                borderRadius: '3px',
+                                                transformOrigin: 'left center',
+                                                background: '#fff',
+                                                animation: 'pageFlip 1.5s infinite 0.3s'
+                                            }}></div>
+                                            <div className="page" style={{
+                                                position: 'absolute',
+                                                width: '100%',
+                                                height: '100%',
+                                                border: '2px solid #1890ff',
+                                                borderRadius: '3px',
+                                                transformOrigin: 'left center',
+                                                background: '#fff',
+                                                animation: 'pageFlip 1.5s infinite 0.6s'
+                                            }}></div>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                /* Success Animation */
+                                <div className="success-animation" style={{
+                                    position: 'relative',
+                                    width: '100%',
+                                    height: '100%'
+                                }}>
+                                    <div className="checkmark" style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '50%',
+                                        transform: 'translate(-50%, -50%)',
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        border: '3px solid #52c41a',
+                                        animation: 'scaleIn 0.5s ease-in-out'
+                                    }}>
+                                        <div className="check" style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%) rotate(45deg)',
+                                            width: '20px',
+                                            height: '40px',
+                                            border: 'solid #52c41a',
+                                            borderWidth: '0 3px 3px 0',
+                                            animation: 'checkmark 0.5s ease-in-out 0.5s forwards'
+                                        }}></div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="processingIndicator" style={{
                             marginBottom: '30px'
                         }}>
@@ -2565,8 +2672,8 @@ export default function Home() {
                                 <div className="progressFill" style={{
                                     height: '100%',
                                     width: `${progress}%`,
-                                    backgroundColor: '#1890ff',
-                                    transition: 'width 0.5s ease-in-out'
+                                    backgroundColor: progress === 100 ? '#52c41a' : '#1890ff',
+                                    transition: 'width 0.5s ease-in-out, background-color 0.5s ease-in-out'
                                 }}></div>
                             </div>
                             
@@ -2578,7 +2685,12 @@ export default function Home() {
                                 fontWeight: 'bold'
                             }}>
                                 <span>{analysisStage}</span>
-                                <div style={{ fontSize: '14px', opacity: 0.8, marginTop: '5px' }}>
+                                <div style={{ 
+                                    fontSize: '14px', 
+                                    opacity: 0.8, 
+                                    marginTop: '5px',
+                                    color: progress === 100 ? '#52c41a' : '#1890ff'
+                                }}>
                                     {progress}% Complete
                                 </div>
                             </div>
@@ -2598,15 +2710,19 @@ export default function Home() {
                                 <div style={{ color: '#000000', opacity: 0.9, fontSize: '14px' }}>
                                     {processingLogs.map((log, index) => (
                                         <div key={index} style={{ marginBottom: '5px' }}>
-                                            <span style={{ color: '#1890ff' }}>{`>`}</span> {log}
+                                            <span style={{ color: progress === 100 ? '#52c41a' : '#1890ff' }}>{`>`}</span> {log}
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <Typography.Title level={4} style={{ color: '#000000', marginTop: '20px' }}>
-                        {jobId ? 'Analyzing Your Book' : 'Preparing Analysis'}
+                    <Typography.Title level={4} style={{ 
+                        color: progress === 100 ? '#52c41a' : '#000000', 
+                        marginTop: '20px',
+                        transition: 'color 0.5s ease-in-out'
+                    }}>
+                        {progress === 100 ? 'Analysis Complete!' : jobId ? 'Analyzing Your Book' : 'Preparing Analysis'}
                     </Typography.Title>
                 </div>
             )}
