@@ -912,206 +912,206 @@ export default function Home() {
         <Layout style={{ minHeight: '100vh' }}>
             <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
             <div className="content-container" style={{ padding: '0 50px', marginTop: 64 }}>
-                <Header style={{ 
-                    backgroundColor: '#1890ff', 
-                    color: '#fff', 
-                    textAlign: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 20px',
-                    height: 'auto',
-                    minHeight: '64px'
+            <Header style={{ 
+                backgroundColor: '#1890ff', 
+                color: '#fff', 
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 20px',
+                height: 'auto',
+                minHeight: '64px'
+            }}>
+                <BookOutlined style={{ fontSize: 24, marginRight: 10 }} />
+                <h1 style={{ 
+                    margin: 0, 
+                    fontSize: '1.5rem',
+                    padding: '12px 0'
                 }}>
-                    <BookOutlined style={{ fontSize: 24, marginRight: 10 }} />
-                    <h1 style={{ 
-                        margin: 0, 
-                        fontSize: '1.5rem',
-                        padding: '12px 0'
-                    }}>
-                        📖 eBook AI Analyzer
-                    </h1>
-                </Header>
-                
-                <Content style={{ padding: '20px' }}>
-                    <Row justify="center" gutter={[16, 24]}>
-                        <Col xs={24} sm={22} md={18} lg={14} xl={12}>
-                            <Card 
-                                title={
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <FileTextOutlined style={{ marginRight: 8 }} />
-                                        <span>Upload Your eBook</span>
-                                    </div>
-                                } 
-                                hoverable
-                                className="custom-card"
-                                style={{ 
-                                    marginBottom: '20px',
-                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                    borderRadius: '8px'
+                    📖 eBook AI Analyzer
+                </h1>
+            </Header>
+            
+            <Content style={{ padding: '20px' }}>
+                <Row justify="center" gutter={[16, 24]}>
+                    <Col xs={24} sm={22} md={18} lg={14} xl={12}>
+                        <Card 
+                            title={
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    <FileTextOutlined style={{ marginRight: 8 }} />
+                                    <span>Upload Your eBook</span>
+                                </div>
+                            } 
+                            hoverable
+                            className="custom-card"
+                            style={{ 
+                                marginBottom: '20px',
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                borderRadius: '8px'
+                            }}
+                        >
+                            <Upload
+                                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                showUploadList={true}
+                                maxCount={1}
+                                beforeUpload={(file) => {
+                                    const fileType = file.name.toLowerCase().split('.').pop();
+                                    const isValidType = fileType === 'pdf' || fileType === 'docx';
+                                    if (!isValidType) {
+                                        message.error('Please upload a PDF or DOCX file');
+                                    }
+                                    return false;
                                 }}
+                                onChange={handleFileChange}
                             >
-                                <Upload
-                                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                    showUploadList={true}
-                                    maxCount={1}
-                                    beforeUpload={(file) => {
-                                        const fileType = file.name.toLowerCase().split('.').pop();
-                                        const isValidType = fileType === 'pdf' || fileType === 'docx';
-                                        if (!isValidType) {
-                                            message.error('Please upload a PDF or DOCX file');
-                                        }
-                                        return false;
-                                    }}
-                                    onChange={handleFileChange}
-                                >
-                                    <Button 
-                                        icon={<UploadOutlined />} 
-                                        type="primary"
-                                        ghost
-                                        className={!file ? "pulse" : ""}
-                                        style={{ width: '100%', height: '50px' }}
-                                    >
-                                        Click to Upload PDF or DOCX
-                                    </Button>
-                                </Upload>
-                                
-                                <Button
-                                    onClick={handleUpload}
-                                    loading={loading}
+                                <Button 
+                                    icon={<UploadOutlined />} 
                                     type="primary"
-                                    className="mt-4"
-                                    style={{ 
-                                        width: '100%', 
-                                        marginTop: '15px',
-                                        height: '50px',
-                                        fontSize: '16px'
-                                    }}
-                                    disabled={!file}
+                                    ghost
+                                    className={!file ? "pulse" : ""}
+                                    style={{ width: '100%', height: '50px' }}
                                 >
-                                    {loading ? `${analysisStage}` : "Analyze eBook"}
+                                    Click to Upload PDF or DOCX
+                                </Button>
+                            </Upload>
+                            
+                            <Button
+                                onClick={handleUpload}
+                                loading={loading}
+                                type="primary"
+                                className="mt-4"
+                                style={{ 
+                                    width: '100%', 
+                                    marginTop: '15px',
+                                    height: '50px',
+                                    fontSize: '16px'
+                                }}
+                                disabled={!file}
+                            >
+                                {loading ? `${analysisStage}` : "Analyze eBook"}
+                            </Button>
+                            
+                            {loading && (
+                                <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                                    <Progress percent={progress} status="active" />
+                                    <p style={{ marginTop: '10px', color: '#1890ff' }}>{analysisStage}</p>
+                                    
+                                    {/* Processing Logs Section */}
+                                    <div style={{ 
+                                        marginTop: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#f5f5f5',
+                                        borderRadius: '4px',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        textAlign: 'left'
+                                    }}>
+                                        <h4 style={{ marginBottom: '8px', color: '#1890ff' }}>Processing Logs:</h4>
+                                        {processingLogs.map((log, index) => (
+                                            <div 
+                                                key={index}
+                                                style={{ 
+                                                    padding: '4px 0',
+                                                    fontSize: '14px',
+                                                    color: '#666',
+                                                    borderBottom: index < processingLogs.length - 1 ? '1px solid #eee' : 'none'
+                                                }}
+                                            >
+                                                    <span style={{ color: '#1890ff' }}>{`>`}</span> {log}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </Card>
+                    </Col>
+                </Row>
+
+                {analysis?.length > 0 && (
+                    <>
+                        {/* Generate Report Buttons - Made more responsive with proper className approach */}
+                        <Row justify="center" style={{ marginTop: '20px' }}>
+                            <Col xs={24} sm={22} md={20} lg={18} xl={16} style={{ textAlign: 'center' }}>
+                                <Button 
+                                    type="primary"
+                                    icon={<FilePdfOutlined />}
+                                    onClick={generateDocx}
+                                    loading={capturingPdf}
+                                    size="large"
+                                    className="pdf-button mobile-responsive-button"
+                                    style={{
+                                        height: 'auto',
+                                        padding: '10px 24px',
+                                        fontSize: '16px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                                    }}
+                                >
+                                    Generate Analysis Report (DOCX)
                                 </Button>
                                 
-                                {loading && (
-                                    <div style={{ marginTop: '20px', textAlign: 'center' }}>
-                                        <Progress percent={progress} status="active" />
-                                        <p style={{ marginTop: '10px', color: '#1890ff' }}>{analysisStage}</p>
-                                        
-                                        {/* Processing Logs Section */}
-                                        <div style={{ 
-                                            marginTop: '15px',
-                                            padding: '10px',
-                                            backgroundColor: '#f5f5f5',
-                                            borderRadius: '4px',
-                                            maxHeight: '200px',
-                                            overflowY: 'auto',
-                                            textAlign: 'left'
-                                        }}>
-                                            <h4 style={{ marginBottom: '8px', color: '#1890ff' }}>Processing Logs:</h4>
-                                            {processingLogs.map((log, index) => (
-                                                <div 
-                                                    key={index}
-                                                    style={{ 
-                                                        padding: '4px 0',
-                                                        fontSize: '14px',
-                                                        color: '#666',
-                                                        borderBottom: index < processingLogs.length - 1 ? '1px solid #eee' : 'none'
-                                                    }}
-                                                >
-                                                    <span style={{ color: '#1890ff' }}>{`>`}</span> {log}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                                <Button 
+                                    type="default"
+                                    icon={<FilePdfOutlined />}
+                                    onClick={generateSimplePdf}
+                                    size="middle"
+                                    className="secondary-button mobile-responsive-button"
+                                    style={{
+                                        marginLeft: '10px',
+                                        height: 'auto',
+                                        padding: '8px 15px'
+                                    }}
+                                >
+                                    Text-Only Report
+                                </Button>
+                                
+                                {pdfSuccess && (
+                                    <Alert
+                                        message="DOCX Report Generated Successfully"
+                                        description="Your DOCX has been saved to your downloads folder."
+                                        type="success"
+                                        showIcon
+                                        closable
+                                        onClose={() => setPdfSuccess(false)}
+                                        className="pdf-success"
+                                        style={{ 
+                                            marginTop: '10px',
+                                            width: '100%',
+                                            maxWidth: '600px',
+                                            margin: '10px auto'
+                                        }}
+                                    />
                                 )}
-                            </Card>
-                        </Col>
-                    </Row>
+                            </Col>
+                        </Row>
 
-                    {analysis?.length > 0 && (
-                        <>
-                            {/* Generate Report Buttons - Made more responsive with proper className approach */}
-                            <Row justify="center" style={{ marginTop: '20px' }}>
-                                <Col xs={24} sm={22} md={20} lg={18} xl={16} style={{ textAlign: 'center' }}>
-                                    <Button 
-                                        type="primary"
-                                        icon={<FilePdfOutlined />}
-                                        onClick={generateDocx}
-                                        loading={capturingPdf}
-                                        size="large"
-                                        className="pdf-button mobile-responsive-button"
-                                        style={{
-                                            height: 'auto',
-                                            padding: '10px 24px',
-                                            fontSize: '16px',
-                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-                                        }}
-                                    >
-                                        Generate Analysis Report (DOCX)
-                                    </Button>
-                                    
-                                    <Button 
-                                        type="default"
-                                        icon={<FilePdfOutlined />}
-                                        onClick={generateSimplePdf}
-                                        size="middle"
-                                        className="secondary-button mobile-responsive-button"
-                                        style={{
-                                            marginLeft: '10px',
-                                            height: 'auto',
-                                            padding: '8px 15px'
-                                        }}
-                                    >
-                                        Text-Only Report
-                                    </Button>
-                                    
-                                    {pdfSuccess && (
-                                        <Alert
-                                            message="DOCX Report Generated Successfully"
-                                            description="Your DOCX has been saved to your downloads folder."
-                                            type="success"
-                                            showIcon
-                                            closable
-                                            onClose={() => setPdfSuccess(false)}
-                                            className="pdf-success"
-                                            style={{ 
-                                                marginTop: '10px',
-                                                width: '100%',
-                                                maxWidth: '600px',
-                                                margin: '10px auto'
-                                            }}
-                                        />
-                                    )}
-                                </Col>
-                            </Row>
-
-                            {/* Editorial Feedback Card - Separate prominent section */}
-                            {constructiveCriticism && (
-                                <Row justify="center" gutter={[0, 24]}>
-                                    <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                                        <Card 
-                                            title={
-                                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                        {/* Editorial Feedback Card - Separate prominent section */}
+                        {constructiveCriticism && (
+                            <Row justify="center" gutter={[0, 24]}>
+                                <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                    <Card 
+                                        title={
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
                                                     <EditOutlined style={{ marginRight: 8, color: '#fa8c16', fontSize: '20px' }} />
                                                     <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#fa8c16' }}>Editorial Assessment</span>
-                                                </div>
-                                            }
-                                            className="custom-card editorial-card fade-in"
-                                            style={{ 
-                                                marginTop: '20px',
+                                            </div>
+                                        }
+                                        className="custom-card editorial-card fade-in"
+                                        style={{ 
+                                            marginTop: '20px',
                                                 boxShadow: '0 4px 20px rgba(250, 140, 22, 0.15)',
                                                 borderRadius: '12px',
                                                 borderTop: '4px solid #fa8c16'
-                                            }}
-                                            variant="outlined"
-                                            hoverable
-                                        >
-                                            <div ref={editorialContentRef}>
-                                                <div style={{
+                                        }}
+                                        variant="outlined"
+                                        hoverable
+                                    >
+                                        <div ref={editorialContentRef}>
+                                            <div style={{
                                                     padding: '15px 20px',
                                                     background: 'rgba(250, 140, 22, 0.05)',
-                                                    borderRadius: '8px',
-                                                    marginBottom: '20px',
+                                                borderRadius: '8px',
+                                                marginBottom: '20px',
                                                     border: '1px solid rgba(250, 140, 22, 0.2)'
                                                 }}>
                                                     <Typography.Text type="secondary" style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
@@ -1196,8 +1196,8 @@ export default function Home() {
                                                                 </span>
                                                             );
                                                         })}
-                                                    </Paragraph>
-                                                </div>
+                                                </Paragraph>
+                                            </div>
                                                 
                                                 {/* Detailed Feedback */}
                                                 <div style={{ marginBottom: '20px' }}>
@@ -1211,127 +1211,174 @@ export default function Home() {
                                                         <CommentOutlined style={{ marginRight: '8px', color: '#fa8c16' }} />
                                                         DETAILED FEEDBACK
                                                     </Title>
+                                            
+                                            <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
+                                                {constructiveCriticism.split('\n').slice(1).map((paragraph, i) => {
+                                                    // Check if paragraph is a numbered point with a heading (e.g., "1. **Copyright Notice**")
+                                                    const numberedHeadingMatch = paragraph.match(/^(\d+)\.\s+\*\*(.*?)\*\*:?(.*)$/);
                                                     
-                                                    <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
-                                                        {constructiveCriticism.split('\n').slice(1).map((paragraph, i) => {
-                                                            // Check if paragraph is a numbered point with a heading (e.g., "1. **Copyright Notice**")
-                                                            const numberedHeadingMatch = paragraph.match(/^(\d+)\.\s+\*\*(.*?)\*\*:?(.*)$/);
-                                                            
-                                                            if (numberedHeadingMatch) {
-                                                                const [, number, headingText, remainingText] = numberedHeadingMatch;
+                                                    // Check if paragraph starts with a heading like "**Cover Page:**"
+                                                    const standaloneHeadingMatch = paragraph.match(/^\*\*(.*?)(?:\*\*:|\*\*)(.*)$/);
+                                                    
+                                                    if (numberedHeadingMatch) {
+                                                        const [, number, headingText, remainingText] = numberedHeadingMatch;
+                                                        
+                                                        return (
+                                                            <div className="feedback-entry" key={i} style={{
+                                                                marginBottom: '20px',
+                                                                padding: '15px',
+                                                                background: 'white',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #f0f0f0',
+                                                                boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    marginBottom: '12px'
+                                                                }}>
+                                                                    <div style={{ 
+                                                                        width: '28px',
+                                                                        height: '28px',
+                                                                        borderRadius: '50%',
+                                                                        background: 'rgba(250, 140, 22, 0.1)',
+                                                                        color: '#fa8c16',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        fontWeight: 'bold',
+                                                                        marginRight: '10px'
+                                                                    }}>
+                                                                        {number}
+                                                                    </div>
+                                                                    <h4 style={{ 
+                                                                        margin: '0',
+                                                                        fontSize: '16px',
+                                                                        fontWeight: 'bold',
+                                                                        color: '#fa8c16'
+                                                                    }}>
+                                                                        {headingText}
+                                                                    </h4>
+                                                                </div>
                                                                 
-                                                                return (
-                                                                    <div className="feedback-entry" key={i} style={{
-                                                                        marginBottom: '20px',
-                                                                        padding: '15px',
-                                                                        background: 'white',
-                                                                        borderRadius: '8px',
-                                                                        border: '1px solid #f0f0f0',
-                                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                                                                <Paragraph style={{ 
+                                                                    margin: '0 0 0 38px',
+                                                                    fontSize: '14px',
+                                                                    color: '#555'
+                                                                }}>
+                                                                    {remainingText}
+                                                                </Paragraph>
+                                                            </div>
+                                                        );
+                                                    } else if (standaloneHeadingMatch) {
+                                                        // Handle standalone headings like "**Cover Page:**"
+                                                        const [, headingText, remainingText] = standaloneHeadingMatch;
+                                                        
+                                                        return (
+                                                            <div className="feedback-entry" key={i} style={{
+                                                                marginBottom: '20px',
+                                                                padding: '15px',
+                                                                background: 'white',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #f0f0f0',
+                                                                boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    marginBottom: '12px'
+                                                                }}>
+                                                                    <h4 style={{ 
+                                                                        margin: '0',
+                                                                        fontSize: '16px',
+                                                                        fontWeight: 'bold',
+                                                                        color: '#fa8c16',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center'
                                                                     }}>
                                                                         <div style={{ 
-                                                                            display: 'flex', 
-                                                                            alignItems: 'center', 
-                                                                            marginBottom: '12px'
-                                                                        }}>
-                                                                            <div style={{ 
-                                                                                width: '28px',
-                                                                                height: '28px',
-                                                                                borderRadius: '50%',
-                                                                                background: 'rgba(250, 140, 22, 0.1)',
-                                                                                color: '#fa8c16',
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                fontWeight: 'bold',
-                                                                                marginRight: '10px'
-                                                                            }}>
-                                                                                {number}
-                                                                            </div>
-                                                                            <h4 style={{ 
-                                                                                margin: '0',
-                                                                                fontSize: '16px',
-                                                                                fontWeight: 'bold',
-                                                                                color: '#fa8c16'
-                                                                            }}>
+                                                                            width: '8px', 
+                                                                            height: '8px', 
+                                                                            borderRadius: '50%', 
+                                                                            background: '#fa8c16', 
+                                                                            marginRight: '8px' 
+                                                                        }}></div>
+                                                                        {headingText}
+                                                                    </h4>
+                                                                </div>
+                                                                
+                                                                <Paragraph style={{ 
+                                                                    margin: '0 0 0 16px',
+                                                                    fontSize: '14px',
+                                                                    color: '#555'
+                                                                }}>
+                                                                    {remainingText}
+                                                                </Paragraph>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    
+                                                    // Handle regular paragraphs or other ** patterns
+                                                    // Split the paragraph into words and wrap suggestions in spans
+                                                    const words = paragraph.split(/(\s+)/);
+                                                    const suggestionWords = [
+                                                        'should consider', 'recommend', 'could improve', 'suggest',
+                                                        'try to', 'focus on', 'needs to', 'must', 'important to',
+                                                        'enhance', 'revise', 'develop', 'strengthen', 'add',
+                                                        'remove', 'modify', 'prioritize'
+                                                    ];
+                                                    
+                                                    return (
+                                                        <div className="feedback-entry" key={i} style={{
+                                                            marginBottom: '15px',
+                                                            padding: '12px 15px',
+                                                            background: i % 2 === 0 ? '#fafafa' : 'transparent',
+                                                            borderRadius: '8px'
+                                                        }}>
+                                                            <Paragraph style={{ margin: 0 }}>
+                                                                {words.map((word, j) => {
+                                                                    // Check if word contains ** pattern indicating heading
+                                                                    if (word.startsWith('**') && word.endsWith('**')) {
+                                                                        const headingText = word.substring(2, word.length - 2);
+                                                                        return (
+                                                                            <h4 
+                                                                                key={j}
+                                                                                style={{
+                                                                                    margin: '15px 0 8px', 
+                                                                                    color: '#fa8c16', 
+                                                                                    fontSize: '16px', 
+                                                                                    borderBottom: '1px solid #f0f0f0', 
+                                                                                    paddingBottom: '5px',
+                                                                                    fontWeight: 'bold',
+                                                                                    display: 'block',
+                                                                                    width: '100%'
+                                                                                }}
+                                                                            >
                                                                                 {headingText}
                                                                             </h4>
-                                                                        </div>
-                                                                        
-                                                                        <Paragraph style={{ 
-                                                                            margin: '0 0 0 38px',
-                                                                            fontSize: '14px',
-                                                                            color: '#555'
-                                                                        }}>
-                                                                            {remainingText}
-                                                                        </Paragraph>
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            
-                                                            // Handle regular paragraphs or other ** patterns
-                                                            // Split the paragraph into words and wrap suggestions in spans
-                                                            const words = paragraph.split(/(\s+)/);
-                                                            const suggestionWords = [
-                                                                'should consider', 'recommend', 'could improve', 'suggest',
-                                                                'try to', 'focus on', 'needs to', 'must', 'important to',
-                                                                'enhance', 'revise', 'develop', 'strengthen', 'add',
-                                                                'remove', 'modify', 'prioritize'
-                                                            ];
-                                                            
-                                                            return (
-                                                                <div className="feedback-entry" key={i} style={{
-                                                                    marginBottom: '15px',
-                                                                    padding: '12px 15px',
-                                                                    background: i % 2 === 0 ? '#fafafa' : 'transparent',
-                                                                    borderRadius: '8px'
-                                                                }}>
-                                                                    <Paragraph style={{ margin: 0 }}>
-                                                                        {words.map((word, j) => {
-                                                                            // Check if word contains ** pattern indicating heading
-                                                                            if (word.startsWith('**') && word.endsWith('**')) {
-                                                                                const headingText = word.substring(2, word.length - 2);
-                                                                                return (
-                                                                                    <h4 
-                                                                                        key={j}
-                                                                                        style={{
-                                                                                            margin: '15px 0 8px', 
-                                                                                            color: '#fa8c16', 
-                                                                                            fontSize: '16px', 
-                                                                                            borderBottom: '1px solid #f0f0f0', 
-                                                                                            paddingBottom: '5px',
-                                                                                            fontWeight: 'bold',
-                                                                                            display: 'block',
-                                                                                            width: '100%'
-                                                                                        }}
-                                                                                    >
-                                                                                        {headingText}
-                                                                                    </h4>
-                                                                                );
-                                                                            }
-                                                                            
-                                                                            const isSuggestion = suggestionWords.some(suggestion => 
-                                                                                word.toLowerCase().includes(suggestion)
-                                                                            );
-                                                                            return (
-                                                                                <span 
-                                                                                    key={j}
-                                                                                    style={{
-                                                                                        backgroundColor: isSuggestion ? 'rgba(250, 140, 22, 0.1)' : 'transparent',
-                                                                                        color: isSuggestion ? '#fa8c16' : 'inherit',
-                                                                                        padding: isSuggestion ? '0 4px' : '0',
-                                                                                        borderRadius: isSuggestion ? '3px' : '0',
-                                                                                        fontWeight: isSuggestion ? '500' : 'normal'
-                                                                                    }}
-                                                                                >
-                                                                                    {word}
-                                                                                </span>
-                                                                            );
-                                                                        })}
-                                                                    </Paragraph>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                        );
+                                                                    }
+                                                                    
+                                                                    const isSuggestion = suggestionWords.some(suggestion => 
+                                                                        word.toLowerCase().includes(suggestion)
+                                                                    );
+                                                                    return (
+                                                                        <span 
+                                                                            key={j}
+                                                                            style={{
+                                                                                backgroundColor: isSuggestion ? 'rgba(250, 140, 22, 0.1)' : 'transparent',
+                                                                                color: isSuggestion ? '#fa8c16' : 'inherit',
+                                                                                padding: isSuggestion ? '0 4px' : '0',
+                                                                                borderRadius: isSuggestion ? '3px' : '0',
+                                                                                fontWeight: isSuggestion ? '500' : 'normal'
+                                                                            }}
+                                                                        >
+                                                                            {word}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </Paragraph>
+                                                        </div>
+                                                    );
+                                                })}
                                                     </div>
                                                 </div>
                                                 
@@ -1483,41 +1530,41 @@ export default function Home() {
                                                             The introduction promises a deep dive into the complexities of the human mind through the lens of hypnosis. It's beautifully written but stops abruptly. Ensure that this section flows seamlessly into the body of the book, perhaps by ending with a question, a statement of intent, or a brief overview of what the reader can expect to discover within the pages.
                                                         </Paragraph>
                                                     </div>
-                                                </div>
                                             </div>
-                                        </Card>
-                                    </Col>
-                                </Row>
-                            )}
-                            
-                            {/* Main Analysis Report Card */}
-                            <Row justify="center" gutter={[0, 24]}>
-                                <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                                    <Card 
-                                        title={
-                                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                <BookOutlined style={{ marginRight: 8 }} />
-                                                <span>Analysis Report</span>
-                                            </div>
-                                        }
-                                        className="custom-card fade-in"
-                                        style={{ 
-                                            marginTop: '20px',
-                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                            borderRadius: '8px',
-                                        }}
-                                        variant="outlined"
-                                        hoverable
-                                    >
-                                        <div ref={analysisContentRef}>
-                                            {summary && (
+                                        </div>
+                                    </Card>
+                                </Col>
+                            </Row>
+                        )}
+                        
+                        {/* Main Analysis Report Card */}
+                        <Row justify="center" gutter={[0, 24]}>
+                            <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                <Card 
+                                    title={
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <BookOutlined style={{ marginRight: 8 }} />
+                                            <span>Analysis Report</span>
+                                        </div>
+                                    }
+                                    className="custom-card fade-in"
+                                    style={{ 
+                                        marginTop: '20px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '8px',
+                                    }}
+                                    variant="outlined"
+                                    hoverable
+                                >
+                                    <div ref={analysisContentRef}>
+                                        {summary && (
                                                 <div className="book-summary fade-in" style={{ marginBottom: '30px' }}>
-                                                    <Title level={4}>
-                                                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                            <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                                                            <span>Book Summary</span>
-                                                        </div>
-                                                    </Title>
+                                                <Title level={4}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                                        <span>Book Summary</span>
+                                                    </div>
+                                                </Title>
                                                     <div style={{
                                                         padding: '20px',
                                                         background: 'linear-gradient(to right, rgba(24, 144, 255, 0.05), rgba(24, 144, 255, 0.01))',
@@ -1580,22 +1627,22 @@ export default function Home() {
                                                                     textAlign: 'justify'
                                                                 }}>
                                                                     {paragraph}
-                                                                </Paragraph>
+                                                </Paragraph>
                                                             );
                                                         })}
                                                     </div>
-                                                    <Divider />
-                                                </div>
-                                            )}
-                                            
-                                            {prologue && (
+                                                <Divider />
+                                            </div>
+                                        )}
+                                        
+                                        {prologue && (
                                                 <div className="book-prologue slide-in" style={{ marginBottom: '30px' }}>
-                                                    <Title level={4}>
-                                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <Title level={4}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
                                                             <CommentOutlined style={{ marginRight: 8, color: '#722ed1' }} />
                                                             <span style={{ color: '#722ed1' }}>Compelling Prologue</span>
-                                                        </div>
-                                                    </Title>
+                                                    </div>
+                                                </Title>
                                                     <div style={{
                                                         padding: '25px',
                                                         background: 'linear-gradient(to right, rgba(114, 46, 209, 0.05), rgba(114, 46, 209, 0.02))',
@@ -1673,104 +1720,104 @@ export default function Home() {
                                                                     textAlign: 'justify'
                                                                 }}>
                                                                     {paragraph}
-                                                                </Paragraph>
+                                                </Paragraph>
                                                             );
                                                         })}
                                                     </div>
-                                                    <Divider />
+                                                <Divider />
+                                            </div>
+                                        )}
+                                        
+                                        {/* Overall Score Section */}
+                                        <div className="overall-score-section fade-in" style={{ marginBottom: '20px' }}>
+                                            <Title level={4}>Overall Assessment</Title>
+                                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                                                <Progress 
+                                                    className="dashboard-animate"
+                                                    type="dashboard" 
+                                                    percent={results.percentage} 
+                                                    width={120}
+                                                    format={() => (
+                                                        <div>
+                                                            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{results.totalScore}</div>
+                                                            <div style={{ fontSize: '12px' }}>out of {results.maxPossibleScore}</div>
+                                                        </div>
+                                                    )}
+                                                    strokeColor={
+                                                        results.percentage >= 80 ? '#52c41a' : // Excellent
+                                                        results.percentage >= 60 ? '#faad14' : // Good
+                                                        '#f5222d'                             // Needs improvement
+                                                    }
+                                                />
+                                            </div>
+                                            
+                                            {results.strengths.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <Title level={5}>Strengths</Title>
+                                                    <ul>
+                                                        {results.strengths.map((strength, index) => (
+                                                            <li className="strength-item" key={index}>{strength}</li>
+                                                        ))}
+                                                    </ul>
                                                 </div>
                                             )}
                                             
-                                            {/* Overall Score Section */}
-                                            <div className="overall-score-section fade-in" style={{ marginBottom: '20px' }}>
-                                                <Title level={4}>Overall Assessment</Title>
-                                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-                                                    <Progress 
-                                                        className="dashboard-animate"
-                                                        type="dashboard" 
-                                                        percent={results.percentage} 
-                                                        width={120}
-                                                        format={() => (
-                                                            <div>
-                                                                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{results.totalScore}</div>
-                                                                <div style={{ fontSize: '12px' }}>out of {results.maxPossibleScore}</div>
-                                                            </div>
-                                                        )}
-                                                        strokeColor={
-                                                            results.percentage >= 80 ? '#52c41a' : // Excellent
-                                                            results.percentage >= 60 ? '#faad14' : // Good
-                                                            '#f5222d'                             // Needs improvement
-                                                        }
-                                                    />
+                                            {results.improvements.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <Title level={5}>Recommended Improvements</Title>
+                                                    <ul>
+                                                        {results.improvements.map((item, index) => (
+                                                            <li className="improvement-item" key={index}>
+                                                                <strong>{item.area}</strong> (Score: {item.score}/5): {item.justification}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
                                                 </div>
-                                                
-                                                {results.strengths.length > 0 && (
-                                                    <div style={{ marginBottom: '15px' }}>
-                                                        <Title level={5}>Strengths</Title>
-                                                        <ul>
-                                                            {results.strengths.map((strength, index) => (
-                                                                <li className="strength-item" key={index}>{strength}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                
-                                                {results.improvements.length > 0 && (
-                                                    <div style={{ marginBottom: '15px' }}>
-                                                        <Title level={5}>Recommended Improvements</Title>
-                                                        <ul>
-                                                            {results.improvements.map((item, index) => (
-                                                                <li className="improvement-item" key={index}>
-                                                                    <strong>{item.area}</strong> (Score: {item.score}/5): {item.justification}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                
-                                                {/* Score interpretation */}
-                                                <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
-                                                    <Alert
-                                                        message={
-                                                            results.percentage >= 80 ? "Excellent" :
-                                                            results.percentage >= 60 ? "Good" :
-                                                            results.percentage >= 40 ? "Average" :
-                                                            "Needs Improvement"
-                                                        }
-                                                        description={
-                                                            results.percentage >= 80 ? "This eBook demonstrates exceptional quality across most parameters." :
-                                                            results.percentage >= 60 ? "This eBook has good overall quality with some areas for improvement." :
-                                                            results.percentage >= 40 ? "This eBook meets basic standards but has several areas that need attention." :
-                                                            "This eBook requires significant improvements in multiple areas."
-                                                        }
-                                                        type={
-                                                            results.percentage >= 80 ? "success" :
-                                                            results.percentage >= 60 ? "info" :
-                                                            results.percentage >= 40 ? "warning" :
-                                                            "error"
-                                                        }
-                                                        showIcon
-                                                    />
-                                                </div>
-                                                
-                                                {/* Extra guidance for low scores */}
-                                                {results.percentage < 40 && (
-                                                    <div style={{ marginBottom: '20px' }}>
-                                                        <Title level={5}>General Improvement Suggestions</Title>
-                                                        <ul>
-                                                            <li>Consider having the text professionally edited to improve readability and flow.</li>
-                                                            <li>Check for grammatical errors and typos throughout the document.</li>
-                                                            <li>Work on improving the structure with clear chapter divisions and sections.</li>
-                                                            <li>Ensure formatting is consistent throughout the book.</li>
-                                                            <li>Consider adding more original insights or examples to enhance content value.</li>
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                
-                                                <Divider />
+                                            )}
+                                            
+                                            {/* Score interpretation */}
+                                            <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
+                                                <Alert
+                                                    message={
+                                                        results.percentage >= 80 ? "Excellent" :
+                                                        results.percentage >= 60 ? "Good" :
+                                                        results.percentage >= 40 ? "Average" :
+                                                        "Needs Improvement"
+                                                    }
+                                                    description={
+                                                        results.percentage >= 80 ? "This eBook demonstrates exceptional quality across most parameters." :
+                                                        results.percentage >= 60 ? "This eBook has good overall quality with some areas for improvement." :
+                                                        results.percentage >= 40 ? "This eBook meets basic standards but has several areas that need attention." :
+                                                        "This eBook requires significant improvements in multiple areas."
+                                                    }
+                                                    type={
+                                                        results.percentage >= 80 ? "success" :
+                                                        results.percentage >= 60 ? "info" :
+                                                        results.percentage >= 40 ? "warning" :
+                                                        "error"
+                                                    }
+                                                    showIcon
+                                                />
                                             </div>
                                             
-                                            <Title level={4}>Detailed Analysis</Title>
+                                            {/* Extra guidance for low scores */}
+                                            {results.percentage < 40 && (
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <Title level={5}>General Improvement Suggestions</Title>
+                                                    <ul>
+                                                        <li>Consider having the text professionally edited to improve readability and flow.</li>
+                                                        <li>Check for grammatical errors and typos throughout the document.</li>
+                                                        <li>Work on improving the structure with clear chapter divisions and sections.</li>
+                                                        <li>Ensure formatting is consistent throughout the book.</li>
+                                                        <li>Consider adding more original insights or examples to enhance content value.</li>
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            
+                                            <Divider />
+                                        </div>
+                                        
+                                        <Title level={4}>Detailed Analysis</Title>
                                             <div className="parameter-cards-container" style={{ marginBottom: '30px' }}>
                                                 {analysis.map((item, index) => {
                                                     // Scale down score if it's out of 10
@@ -1882,79 +1929,79 @@ export default function Home() {
                                                 })}
                                             </div>
 
-                                            {downloadLink && (
-                                                <a 
-                                                    href={downloadLink} 
-                                                    download="report.csv"
-                                                    style={{ textDecoration: 'none' }}
-                                                >
-                                                    <Button 
-                                                        type="primary" 
-                                                        icon={<DownloadOutlined />}
-                                                        style={{ marginTop: '15px' }}
-                                                    >
-                                                        Download CSV Report
-                                                    </Button>
-                                                </a>
-                                            )}
-                                            
-                                            <Button 
-                                                type="primary"
-                                                icon={<FilePdfOutlined />}
-                                                onClick={generatePdf}
-                                                loading={capturingPdf}
-                                                className="pdf-button"
-                                                style={{ 
-                                                    marginTop: '15px', 
-                                                    marginLeft: downloadLink ? '10px' : '0',
-                                                }}
+                                        {downloadLink && (
+                                            <a 
+                                                href={downloadLink} 
+                                                download="report.csv"
+                                                style={{ textDecoration: 'none' }}
                                             >
-                                                {capturingPdf ? 'Generating...' : 'Save as PDF'}
-                                            </Button>
-                                        </div>
-                                    </Card>
-                                </Col>
-                            </Row>
-                        </>
-                    )}
-
-                    {analysis.length === 0 && !loading && (
-                        <Row justify="center">
-                            <Col xs={24} sm={18} md={16} lg={14} xl={12}>
-                                <Alert 
-                                    message="Get started by uploading a PDF to analyze." 
-                                    description="Our AI will analyze your eBook and provide detailed insights on readability, content quality, structure, and more." 
-                                    type="info" 
-                                    showIcon 
-                                    style={{ marginTop: '30px' }}
-                                />
+                                                <Button 
+                                                    type="primary" 
+                                                    icon={<DownloadOutlined />}
+                                                    style={{ marginTop: '15px' }}
+                                                >
+                                                    Download CSV Report
+                                                </Button>
+                                            </a>
+                                        )}
+                                        
+                                        <Button 
+                                            type="primary"
+                                            icon={<FilePdfOutlined />}
+                                            onClick={generatePdf}
+                                            loading={capturingPdf}
+                                            className="pdf-button"
+                                            style={{ 
+                                                marginTop: '15px', 
+                                                marginLeft: downloadLink ? '10px' : '0',
+                                            }}
+                                        >
+                                            {capturingPdf ? 'Generating...' : 'Save as PDF'}
+                                        </Button>
+                                    </div>
+                                </Card>
                             </Col>
                         </Row>
-                    )}
-                </Content>
-                
-                <Footer style={{ 
-                    textAlign: 'center', 
-                    background: '#f0f2f5',
-                    padding: '10px'
-                }}>
-                    eBook AI Analyzer ©{new Date().getFullYear()} - Powered by Next.js and OpenAI
-                </Footer>
+                    </>
+                )}
 
-                {/* Add the Analysis Overlay */}
-                {showAnalysisOverlay && (
+                {analysis.length === 0 && !loading && (
+                    <Row justify="center">
+                        <Col xs={24} sm={18} md={16} lg={14} xl={12}>
+                            <Alert 
+                                message="Get started by uploading a PDF to analyze." 
+                                description="Our AI will analyze your eBook and provide detailed insights on readability, content quality, structure, and more." 
+                                type="info" 
+                                showIcon 
+                                style={{ marginTop: '30px' }}
+                            />
+                        </Col>
+                    </Row>
+                )}
+            </Content>
+            
+            <Footer style={{ 
+                textAlign: 'center', 
+                background: '#f0f2f5',
+                padding: '10px'
+            }}>
+                eBook AI Analyzer ©{new Date().getFullYear()} - Powered by Next.js and OpenAI
+            </Footer>
+
+            {/* Add the Analysis Overlay */}
+            {showAnalysisOverlay && (
                     <div className="analyzerOverlay" style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
                         width: '100%',
                         height: '100%',
                         background: 'rgba(0, 21, 41, 0.8)',
-                        display: 'flex',
+                    display: 'flex',
                         flexDirection: 'column',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        zIndex: 1000,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1000,
                         padding: '20px'
                     }}>
                         <div style={{ maxWidth: '600px', textAlign: 'center' }}>
@@ -1975,8 +2022,8 @@ export default function Home() {
                                         width: `${progress}%`,
                                         backgroundColor: '#1890ff',
                                         transition: 'width 0.5s ease-in-out'
-                                    }}></div>
-                                </div>
+                                }}></div>
+                            </div>
                                 
                                 {/* Status Information */}
                                 <div className="statusInfo" style={{
@@ -2001,98 +2048,98 @@ export default function Home() {
                                         position: 'relative',
                                         width: '80px',
                                         height: '80px'
+                            }}>
+                                <div className="head" style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    background: '#fff',
+                                    borderRadius: '50%',
+                                    position: 'absolute',
+                                    top: '0',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)'
+                                }}>
+                                    <div className="face" style={{
+                                        position: 'absolute',
+                                        width: '100%',
+                                        height: '100%'
                                     }}>
-                                        <div className="head" style={{
-                                            width: '40px',
-                                            height: '40px',
-                                            background: '#fff',
-                                            borderRadius: '50%',
-                                            position: 'absolute',
-                                            top: '0',
-                                            left: '50%',
-                                            transform: 'translateX(-50%)'
-                                        }}>
-                                            <div className="face" style={{
-                                                position: 'absolute',
-                                                width: '100%',
-                                                height: '100%'
-                                            }}>
                                                 {/* Dynamic expression based on progress */}
-                                                <div className="eyes" style={{
-                                                    position: 'absolute',
-                                                    top: '30%',
-                                                    width: '100%',
-                                                    height: '4px',
-                                                    background: '#333',
-                                                    animation: progress > 80 ? 'happy 1s ease-in-out infinite' : 'blink 3s ease-in-out infinite'
-                                                }}></div>
-                                                <div className="mouth" style={{
-                                                    position: 'absolute',
-                                                    bottom: '20%',
-                                                    left: '50%',
-                                                    transform: 'translateX(-50%)',
-                                                    width: '20px',
-                                                    height: '10px',
-                                                    borderBottom: '2px solid #333',
-                                                    borderLeft: '2px solid #333',
-                                                    borderRight: '2px solid #333',
-                                                    borderBottomLeftRadius: '10px',
-                                                    borderBottomRightRadius: '10px',
-                                                    animation: progress > 80 ? 'smile 2s ease-in-out infinite' : 'think 2s ease-in-out infinite'
-                                                }}></div>
-                                            </div>
-                                        </div>
-                                        <div className="body" style={{
+                                        <div className="eyes" style={{
                                             position: 'absolute',
-                                            top: '40px',
+                                            top: '30%',
                                             width: '100%',
-                                            height: '40px',
-                                            background: '#1890ff',
-                                            borderRadius: '5px'
-                                        }}>
-                                            <div className="arm left" style={{
-                                                position: 'absolute',
-                                                top: '0',
-                                                left: '-20px',
-                                                width: '20px',
-                                                height: '40px',
-                                                background: '#1890ff',
-                                                animation: 'armMove 2s ease-in-out infinite'
-                                            }}>
-                                                <div className="hand" style={{
-                                                    position: 'absolute',
-                                                    bottom: '0',
-                                                    width: '15px',
-                                                    height: '15px',
-                                                    background: '#fff',
-                                                    borderRadius: '50%'
-                                                }}></div>
+                                            height: '4px',
+                                            background: '#333',
+                                                    animation: progress > 80 ? 'happy 1s ease-in-out infinite' : 'blink 3s ease-in-out infinite'
+                                        }}></div>
+                                        <div className="mouth" style={{
+                                            position: 'absolute',
+                                            bottom: '20%',
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            width: '20px',
+                                            height: '10px',
+                                            borderBottom: '2px solid #333',
+                                            borderLeft: '2px solid #333',
+                                            borderRight: '2px solid #333',
+                                            borderBottomLeftRadius: '10px',
+                                            borderBottomRightRadius: '10px',
+                                                    animation: progress > 80 ? 'smile 2s ease-in-out infinite' : 'think 2s ease-in-out infinite'
+                                        }}></div>
+                                    </div>
+                                </div>
+                                <div className="body" style={{
+                                    position: 'absolute',
+                                    top: '40px',
+                                    width: '100%',
+                                    height: '40px',
+                                    background: '#1890ff',
+                                    borderRadius: '5px'
+                                }}>
+                                    <div className="arm left" style={{
+                                        position: 'absolute',
+                                        top: '0',
+                                        left: '-20px',
+                                        width: '20px',
+                                        height: '40px',
+                                        background: '#1890ff',
+                                        animation: 'armMove 2s ease-in-out infinite'
+                                    }}>
+                                        <div className="hand" style={{
+                                            position: 'absolute',
+                                            bottom: '0',
+                                            width: '15px',
+                                            height: '15px',
+                                            background: '#fff',
+                                            borderRadius: '50%'
+                                        }}></div>
+                                    </div>
+                                    <div className="arm right" style={{
+                                        position: 'absolute',
+                                        top: '0',
+                                        right: '-20px',
+                                        width: '20px',
+                                        height: '40px',
+                                        background: '#1890ff',
+                                        animation: 'armMove 2s ease-in-out infinite reverse'
+                                    }}>
+                                        <div className="hand" style={{
+                                            position: 'absolute',
+                                            bottom: '0',
+                                            width: '15px',
+                                            height: '15px',
+                                            background: '#fff',
+                                            borderRadius: '50%'
+                                        }}></div>
                                             </div>
-                                            <div className="arm right" style={{
-                                                position: 'absolute',
-                                                top: '0',
-                                                right: '-20px',
-                                                width: '20px',
-                                                height: '40px',
-                                                background: '#1890ff',
-                                                animation: 'armMove 2s ease-in-out infinite reverse'
-                                            }}>
-                                                <div className="hand" style={{
-                                                    position: 'absolute',
-                                                    bottom: '0',
-                                                    width: '15px',
-                                                    height: '15px',
-                                                    background: '#fff',
-                                                    borderRadius: '50%'
-                                                }}></div>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <Typography.Title level={4} style={{ color: '#fff', marginTop: '20px' }}>
+                        </div>
+                        <Typography.Title level={4} style={{ color: '#fff', marginTop: '20px' }}>
                                 {jobId ? 'Analyzing Your Book' : 'Preparing Analysis'}
-                            </Typography.Title>
+                        </Typography.Title>
                             
                             {/* Processing details section */}
                             <div className="processingDetails" style={{
@@ -2112,9 +2159,9 @@ export default function Home() {
                                     ))}
                                 </div>
                             </div>
-                        </div>
                     </div>
-                )}
+                </div>
+            )}
             </div>
         </Layout>
     );
