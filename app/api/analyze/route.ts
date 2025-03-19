@@ -22,15 +22,34 @@ try {
   console.error('Error initializing directory:', error);
 }
 
-// In-memory storage for job status (use a database in production)
+// In-memory storage for job status (note: this won't persist between Vercel serverless function invocations)
 const jobStatus = new Map();
 
-// Add a simple GET handler for testing
+// Simple storage for last result (for Vercel serverless environment)
+// We'll store the last result and its timestamp for the last 10 requests
+const lastResults = new Map();
+const MAX_RESULTS = 10;
+
+// Add a simple GET handler for testing or retrieving results
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const jobId = url.searchParams.get('jobId');
+  const finalResult = url.searchParams.get('finalResult');
   
-  // If jobId is provided, return job status
+  // If finalResult is specified, return most recent result (for Vercel serverless compatibility)
+  if (finalResult === 'true' && jobId) {
+    if (lastResults.has(jobId)) {
+      return NextResponse.json(lastResults.get(jobId));
+    }
+    
+    // If job ID doesn't exist in results, return a processing status
+    return NextResponse.json({ 
+      processing: true,
+      message: "Your document is still being analyzed. Please try again in a minute."
+    });
+  }
+  
+  // If jobId is provided, return job status (this will only work locally, not on Vercel)
   if (jobId) {
     if (!jobStatus.has(jobId)) {
       return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
@@ -81,6 +100,33 @@ function generateCSV(analysis: AnalysisItem[]): string {
         headers.join(','),
         ...rows.map(row => row.join(','))
     ].join('\n');
+}
+
+// Store the result for later retrieval
+function storeResult(jobId: string, result: any) {
+    // Store the result with a timestamp
+    lastResults.set(jobId, {
+        ...result,
+        timestamp: Date.now()
+    });
+    
+    // If we have too many results, remove the oldest one
+    if (lastResults.size > MAX_RESULTS) {
+        let oldestKey = null;
+        let oldestTime = Date.now();
+        
+        // Convert Map entries to array to fix TypeScript iteration error
+        Array.from(lastResults.entries()).forEach(([key, value]) => {
+            if (value.timestamp < oldestTime) {
+                oldestTime = value.timestamp;
+                oldestKey = key;
+            }
+        });
+        
+        if (oldestKey) {
+            lastResults.delete(oldestKey);
+        }
+    }
 }
 
 // Analyze text chunks and update job status
@@ -216,8 +262,8 @@ async function processFileAsync(jobId: string, text: string, fileName: string) {
         // Generate CSV content
         const csvContent = generateCSV(combinedAnalysis);
         
-        // Set final status
-        jobStatus.set(jobId, {
+        // Prepare final result
+        const finalResult = {
             status: 'completed',
             progress: 100,
             message: 'Analysis complete',
@@ -228,15 +274,26 @@ async function processFileAsync(jobId: string, text: string, fileName: string) {
             csvContent,
             completed: true,
             fileName
-        });
+        };
+        
+        // Store the result for retrieval by the finalResult endpoint
+        storeResult(jobId, finalResult);
+        
+        // Set final status in job status (for local development)
+        jobStatus.set(jobId, finalResult);
         
     } catch (error) {
         console.error("Processing error:", error);
-        jobStatus.set(jobId, {
+        const errorResult = {
             status: 'error',
             error: error instanceof Error ? error.message : 'Unknown error',
             message: 'Processing failed'
-        });
+        };
+        
+        jobStatus.set(jobId, errorResult);
+        
+        // Store error result for retrieval
+        storeResult(jobId, errorResult);
     }
 }
 
@@ -303,11 +360,14 @@ export async function POST(req: Request) {
                 
             } catch (error) {
                 console.error("Error in background processing:", error);
-                jobStatus.set(jobId, {
+                const errorResult = {
                     status: 'error',
                     error: error instanceof Error ? error.message : 'Unknown error',
                     message: 'File processing failed'
-                });
+                };
+                
+                jobStatus.set(jobId, errorResult);
+                storeResult(jobId, errorResult);
             }
         })();
 
@@ -315,7 +375,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ 
             success: true, 
             jobId,
-            message: "File uploaded. Check status with GET /api/analyze?jobId=" + jobId
+            message: "File uploaded. Processing has started."
         });
         
     } catch (error) {

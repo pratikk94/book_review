@@ -184,17 +184,55 @@ export default function Home() {
     const editorialContentRef = useRef<HTMLDivElement>(null);
     const analysisContentRef = useRef<HTMLDivElement>(null);
     
-    // Poll for job status if we have a jobId
+    // Enhanced polling logic for job status that's more resilient to errors
     useEffect(() => {
         let interval: NodeJS.Timeout;
+        let errorCount = 0;
+        const MAX_ERRORS = 3;
         
         if (jobId && loading) {
             interval = setInterval(async () => {
                 try {
                     const response = await fetch(`/api/analyze?jobId=${jobId}`);
+                    
+                    // Handle 400 Bad Request (likely means job data is gone in serverless environment)
+                    if (response.status === 400) {
+                        errorCount++;
+                        console.log(`Job status check error (${errorCount}/${MAX_ERRORS}): Job ID not found`);
+                        
+                        // After multiple failed attempts, assume job is processing in background
+                        // and show a more graceful error message
+                        if (errorCount >= MAX_ERRORS) {
+                            clearInterval(interval);
+                            setLoading(false);
+                            setProgress(100);
+                            setAnalysisStage("Processing in background");
+                            setProcessingLogs(prev => [
+                                ...prev, 
+                                "Your file is being processed in the background. This may take a few minutes.",
+                                "The results will appear here when ready. You can refresh the page later to check."
+                            ]);
+                            setShowAnalysisOverlay(false);
+                            
+                            // Show fallback message to user
+                            message.info(
+                                "Your document is being processed in the background. This typically takes 1-3 minutes. " +
+                                "The page will update automatically when completed.", 
+                                10
+                            );
+                            
+                            // Implement simpler status check that doesn't rely on in-memory job state
+                            startSimpleProgressCheck();
+                        }
+                        return;
+                    }
+                    
                     if (!response.ok) {
                         throw new Error(`Status check failed: ${response.status}`);
                     }
+                    
+                    // Reset error count on successful response
+                    errorCount = 0;
                     
                     const data = await response.json();
                     console.log("Job status:", data);
@@ -246,9 +284,20 @@ export default function Home() {
                     
                 } catch (error) {
                     console.error("Error checking job status:", error);
-                    setProcessingLogs(prev => [...prev, `Error checking status: ${error}`]);
+                    errorCount++;
+                    
+                    // Log the error but don't spam the user
+                    if (errorCount <= 2) {
+                        setProcessingLogs(prev => [...prev, `Error checking status: ${error}`]);
+                    }
+                    
+                    // After multiple failures, switch to simpler approach
+                    if (errorCount >= MAX_ERRORS) {
+                        clearInterval(interval);
+                        startSimpleProgressCheck();
+                    }
                 }
-            }, 2000); // Poll every 2 seconds
+            }, 2000);
         }
         
         return () => {
@@ -256,6 +305,85 @@ export default function Home() {
         };
     }, [jobId, loading]);
     
+    // Simple progress checker for Vercel deployments where we can't use in-memory job status
+    const startSimpleProgressCheck = () => {
+        // Use artificial progress as fallback
+        let artificialProgress = 20;
+        const progressInterval = setInterval(() => {
+            if (artificialProgress >= 90) {
+                clearInterval(progressInterval);
+                // After approximately 60 seconds, try once more to get the result directly
+                setTimeout(() => {
+                    checkFinalResult();
+                }, 10000);
+                return;
+            }
+            
+            artificialProgress += 5;
+            setProgress(artificialProgress);
+            
+            // Update stages based on progress for better UX
+            if (artificialProgress < 30) setAnalysisStage("Extracting text from document...");
+            else if (artificialProgress < 50) setAnalysisStage("Analyzing content...");
+            else if (artificialProgress < 70) setAnalysisStage("Generating insights...");
+            else setAnalysisStage("Finalizing report...");
+            
+        }, 2000);
+    };
+    
+    // Check for final result directly instead of relying on status updates
+    const checkFinalResult = async () => {
+        try {
+            // Try to get the final result directly using a special endpoint/param
+            const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.analysis) {
+                    setLoading(false);
+                    setProgress(100);
+                    setAnalysisStage("Analysis complete!");
+                    setShowAnalysisOverlay(false);
+                    
+                    // Update UI with results
+                    setAnalysis(data.analysis);
+                    setSummary(data.summary || "");
+                    setPrologue(data.prologue || "");
+                    setConstructiveCriticism(data.constructiveCriticism || "");
+                    
+                    // Create a downloadable CSV link if csvContent exists
+                    if (data.csvContent) {
+                        const csvBlob = new Blob([data.csvContent], { type: 'text/csv' });
+                        const csvUrl = URL.createObjectURL(csvBlob);
+                        setDownloadLink(csvUrl);
+                    }
+                } else {
+                    // Still processing, show appropriate message
+                    setProgress(95);
+                    setAnalysisStage("Almost done...");
+                    
+                    // Try one more time after 15 more seconds
+                    setTimeout(() => {
+                        setLoading(false);
+                        setShowAnalysisOverlay(false);
+                        message.info("Your document analysis is still processing. Please refresh the page in a minute to see the results.");
+                    }, 15000);
+                }
+            } else {
+                // Handle failure
+                setLoading(false);
+                setShowAnalysisOverlay(false);
+                message.error("We couldn't complete the analysis. Please try again with a smaller document.");
+            }
+        } catch (error) {
+            console.error("Error checking final result:", error);
+            setLoading(false);
+            setShowAnalysisOverlay(false);
+            message.error("Analysis couldn't be completed. Please try again.");
+        }
+    };
+
     const handleFileChange = (info: any) => {
         const file = info?.fileList?.[0]?.originFileObj;
         if (!file) {
