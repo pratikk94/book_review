@@ -275,40 +275,140 @@ export default function Home() {
 
     // Animation styles for loader
     const animationStyles = `
-        @keyframes blink {
-            0%, 100% { transform: scaleY(1); }
-            50% { transform: scaleY(0.1); }
-        }
-        @keyframes think {
-            0%, 100% { transform: translateX(-50%) scaleX(1); }
-            50% { transform: translateX(-50%) scaleX(0.8); }
-        }
-        @keyframes armMove {
-            0%, 100% { transform: rotate(0deg); }
-            50% { transform: rotate(30deg); }
-        }
-        @keyframes happy {
-            0%, 100% { transform: scaleY(1) rotate(0deg); }
-            50% { transform: scaleY(0.5) rotate(5deg); }
-        }
-        @keyframes smile {
-            0%, 100% { transform: translateX(-50%) scaleX(1.2) scaleY(1.2); border-radius: 50%; }
-            50% { transform: translateX(-50%) scaleX(1) scaleY(0.8); border-radius: 30%; }
-        }
         @keyframes pageFlip {
             0% { transform: rotateY(0deg); }
-            20% { transform: rotateY(-180deg); }
-            40% { transform: rotateY(-180deg); }
-            60% { transform: rotateY(0deg); }
+            50% { transform: rotateY(-180deg); }
             100% { transform: rotateY(0deg); }
         }
+
         @keyframes scaleIn {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
         }
+
         @keyframes checkmark {
             0% { height: 0; width: 0; opacity: 0; }
             100% { height: 40px; width: 20px; opacity: 1; }
+        }
+
+        .book-loading {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            perspective: 1200px;
+        }
+
+        .book {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 100px;
+            transform-style: preserve-3d;
+        }
+
+        .page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            border: 2px solid #1890ff;
+            border-radius: 3px;
+            transform-origin: left center;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .page:nth-child(1) {
+            animation: pageFlip 1.5s infinite;
+        }
+
+        .page:nth-child(2) {
+            animation: pageFlip 1.5s infinite 0.3s;
+        }
+
+        .page:nth-child(3) {
+            animation: pageFlip 1.5s infinite 0.6s;
+        }
+
+        .success-animation {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .checkmark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #52c41a;
+            animation: scaleIn 0.5s ease-in-out;
+            background: #fff;
+        }
+
+        .check {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%) rotate(45deg);
+            width: 20px;
+            height: 40px;
+            border: solid #52c41a;
+            border-width: 0 3px 3px 0;
+            opacity: 0;
+            animation: checkmark 0.5s ease-in-out 0.5s forwards;
+        }
+
+        .analyzerOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .loader-container {
+            margin-bottom: 30px;
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 30px;
+        }
+
+        .progressBar {
+            width: 100%;
+            max-width: 400px;
+            height: 8px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .progressFill {
+            height: 100%;
+            background-color: #1890ff;
+            transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;
+        }
+
+        .statusInfo {
+            color: #000000;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
         }
     `;
     
@@ -561,6 +661,7 @@ export default function Home() {
         
         setUploading(true);
         setShowLoader(true);
+        setShowAnalysisOverlay(true);
         
         try {
             // Reset states
@@ -569,6 +670,7 @@ export default function Home() {
             setPrologue('');
             setConstructiveCriticism('');
             setDownloadLink(null);
+            setProcessingLogs([]);
             
             // Process all files concurrently
             const uploadPromises = files.map(async (fileStatus, index) => {
@@ -576,127 +678,67 @@ export default function Home() {
                     const formData = new FormData();
                     formData.append('file', fileStatus.file);
                     formData.append("processType", "complete");
-                    formData.append("analysisParams", JSON.stringify({
-                        characterAnalysis: {
-                            trackMainCharacters: true,
-                            characterDevelopment: true,
-                            characterRelationships: true,
-                            dialogueAnalysis: true,
-                            behavioralPatterns: true,
-                            characterMotivations: true,
-                            characterArcs: true,
-                            consistencyCheck: true,
-                            emotionalDepth: true,
-                            characterVoice: true
-                        },
-                        narrativeAnalysis: {
-                            plotProgression: true,
-                            thematicDevelopment: true,
-                            settingConsistency: true,
-                            timelineTracking: true,
-                            subplotIntegration: true,
-                            narrativePacing: true,
-                            conflictDevelopment: true,
-                            resolutionQuality: true,
-                            storyStructure: true,
-                            narrativeVoice: true
-                        },
-                        contextualAnalysis: {
-                            worldBuilding: {
-                                physicalSettings: true,
-                                socialStructures: true,
-                                culturalElements: true,
-                                historicalContext: true,
-                                rules: true,
-                                technology: true,
-                                environment: true
-                            },
-                            thematicDepth: {
-                                mainThemes: true,
-                                symbolism: true,
-                                motifs: true,
-                                subtext: true,
-                                messageClarity: true
-                            },
-                            genreConsistency: true,
-                            toneConsistency: true,
-                            atmosphereBuilding: true
-                        },
-                        technicalAnalysis: {
-                            grammarAndSyntax: true,
-                            readabilityMetrics: true,
-                            sentenceVariety: true,
-                            vocabularyUse: true,
-                            dialogueFormatting: true,
-                            paragraphStructure: true,
-                            chapterOrganization: true,
-                            transitionQuality: true
-                        },
-                        readerEngagement: {
-                            pacing: true,
-                            tension: true,
-                            emotionalImpact: true,
-                            clarity: true,
-                            immersion: true,
-                            memorability: true
+                    
+                    setFiles(prev => prev.map((f, i) => 
+                        i === index ? { ...f, status: 'uploading' } : f
+                    ));
+                    
+                    setProcessingLogs(prev => [...prev, `Starting analysis of ${fileStatus.file.name}...`]);
+
+                    const response = await fetch("/api/analyze", {
+                        method: "POST",
+                        body: formData,
+                        headers: {
+                            'x-process-mode': 'complete-pdf',
+                            'x-analysis-depth': 'comprehensive',
+                            'x-character-tracking': 'enabled',
+                            'x-context-analysis': 'deep'
                         }
-                    }));
+                    });
 
-                    try {
-                        setFiles(prev => prev.map((f, i) => 
-                            i === index ? { ...f, status: 'uploading' } : f
-                        ));
-
-                        const response = await fetch("/api/analyze", {
-                            method: "POST",
-                            body: formData,
-                            headers: {
-                                'x-process-mode': 'complete-pdf',
-                                'x-analysis-depth': 'comprehensive',
-                                'x-character-tracking': 'enabled',
-                                'x-context-analysis': 'deep'
-                            }
-                        });
-
-                        if (!response.ok) {
-                            throw new Error(`Upload failed for ${fileStatus.file.name}`);
-                        }
-
-                        const data = await response.json();
-                        
-                        if (data.jobId) {
-                            setFiles(prev => prev.map((f, i) => 
-                                i === index ? { ...f, jobId: data.jobId } : f
-                            ));
-                            
-                            setProcessingLogs(prev => [...prev, `Started comprehensive analysis of ${fileStatus.file.name}`]);
-                            setProcessingLogs(prev => [...prev, `Analyzing character development and relationships...`]);
-                            setProcessingLogs(prev => [...prev, `Tracking narrative consistency and world-building...`]);
-                            pollJobStatus(data.jobId, index);
-                        }
-
-                    } catch (error) {
-                        console.error(`Error uploading ${fileStatus.file.name}:`, error);
-                        setFiles(prev => prev.map((f, i) => 
-                            i === index ? { ...f, status: 'error', error: error.message } : f
-                        ));
-                        setProcessingLogs(prev => [...prev, `Error processing ${fileStatus.file.name}: ${error.message}`]);
+                    if (!response.ok) {
+                        throw new Error(`Upload failed for ${fileStatus.file.name}: ${response.statusText}`);
                     }
+
+                    const data = await response.json();
+                    
+                    if (data.jobId) {
+                        setFiles(prev => prev.map((f, i) => 
+                            i === index ? { ...f, jobId: data.jobId } : f
+                        ));
+                        
+                        setProcessingLogs(prev => [
+                            ...prev, 
+                            `Analysis started for ${fileStatus.file.name}`,
+                            'Analyzing content structure...',
+                            'Processing character relationships...',
+                            'Evaluating narrative elements...'
+                        ]);
+                        
+                        // Start polling for job status
+                        pollJobStatus(data.jobId, index);
+                    } else {
+                        throw new Error('No job ID received from server');
+                    }
+
                 } catch (error: any) {
                     console.error(`Error uploading ${fileStatus.file.name}:`, error);
                     setFiles(prev => prev.map((f, i) => 
                         i === index ? { ...f, status: 'error', error: error.message } : f
                     ));
                     setProcessingLogs(prev => [...prev, `Error processing ${fileStatus.file.name}: ${error.message}`]);
+                    messageApi.error(`Failed to process ${fileStatus.file.name}: ${error.message}`);
                 }
             });
             
             await Promise.all(uploadPromises);
             setUploading(false);
-        } catch (error) {
+            
+        } catch (error: any) {
             console.error('Upload failed:', error);
-            message.error('Upload failed');
+            messageApi.error('Upload failed');
             setShowLoader(false);
+            setShowAnalysisOverlay(false);
             setUploading(false);
         }
     };
@@ -712,26 +754,19 @@ export default function Home() {
                 }
             });
             
-            if (response.status === 400) {
-                // Job not found or invalid - show appropriate message
-                messageApi.error('Analysis job not found or expired. Please try uploading again.');
-                setShowLoader(false);
-                setFiles(prev => prev.map((f, i) => 
-                    i === fileIndex ? { ...f, status: 'error', error: 'Job expired or not found' } : f
-                ));
-                return;
-            }
-
             if (!response.ok) {
                 throw new Error(`Server returned ${response.status}: ${response.statusText}`);
             }
 
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Invalid response format from server');
-            }
-            
             const data = await response.json();
+            
+            // Update progress and stage
+            if (data.progress !== undefined) {
+                setProgress(data.progress);
+            }
+            if (data.stage) {
+                setAnalysisStage(data.stage);
+            }
             
             // Update file status
             const updatedFiles = [...files];
@@ -746,8 +781,57 @@ export default function Home() {
                 setProcessingLogs(prevLogs => [...prevLogs, data.log]);
             }
             
-            if (data.status === 'completed' && data.completedData) {
-                handleCompletedAnalysis(data.completedData, fileIndex);
+            if (data.status === 'completed' && data.analysis) {
+                // Update file with analysis data
+                updatedFiles[fileIndex] = {
+                    ...updatedFiles[fileIndex],
+                    status: 'success',
+                    progress: 100,
+                    analysis: data.analysis
+                };
+                setFiles(updatedFiles);
+                
+                // Update analysis states
+                setAnalysis(data.analysis);
+                setSummary(data.summary || '');
+                setPrologue(data.prologue || '');
+                setConstructiveCriticism(data.constructiveCriticism || '');
+                
+                // Update character analysis if present
+                if (data.characterAnalysis) {
+                    setCharacterMap(prevMap => ({
+                        ...prevMap,
+                        ...data.characterAnalysis
+                    }));
+                    setMainCharacters(Object.keys(data.characterAnalysis));
+                }
+                
+                // Update plot timeline if present
+                if (data.plotTimeline) {
+                    setPlotTimeline(prevTimeline => [...prevTimeline, ...(data.plotTimeline as any[])]);
+                }
+                
+                // Update world building elements if present
+                if (data.worldBuilding) {
+                    setWorldBuildingElements(prevElements => {
+                        const newElements = { ...prevElements };
+                        Object.entries(data.worldBuilding as Record<string, string[]>).forEach(([key, value]) => {
+                            newElements[key] = Array.from(new Set([...(newElements[key] || []), ...value]));
+                        });
+                        return newElements;
+                    });
+                }
+                
+                // Create downloadable CSV if present
+                if (data.csvContent) {
+                    const blob = new Blob([data.csvContent], { type: 'text/csv' });
+                    setDownloadLink(URL.createObjectURL(blob));
+                }
+                
+                setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
+                setShowLoader(false);
+                setShowAnalysisOverlay(false);
+                messageApi.success('Analysis completed successfully!');
                 return;
             }
             
@@ -765,39 +849,6 @@ export default function Home() {
         }
     };
 
-    // Helper function to handle completed analysis
-    const handleCompletedAnalysis = (completedData: any, fileIndex: number) => {
-        const updatedFiles = [...files];
-        updatedFiles[fileIndex] = {
-            ...updatedFiles[fileIndex],
-            status: 'success',
-            progress: 100,
-            analysis: completedData
-        };
-        setFiles(updatedFiles);
-        
-        if (completedData.characterAnalysis) {
-            setCharacterMap(prevMap => ({
-                ...prevMap,
-                ...completedData.characterAnalysis
-            }));
-            setMainCharacters(Object.keys(completedData.characterAnalysis));
-        }
-        
-        if (completedData.plotTimeline) {
-            setPlotTimeline(prevTimeline => [...prevTimeline, ...(completedData.plotTimeline as any[])]);
-        }
-        
-        if (completedData.worldBuilding) {
-            updateWorldBuildingElements(completedData.worldBuilding);
-        }
-        
-        updateAnalysisStates(completedData);
-        setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
-        setShowLoader(false);
-        messageApi.success('Analysis completed successfully!');
-    };
-
     // Helper function to handle analysis errors
     const handleAnalysisError = (errorMessage: string, fileIndex: number) => {
         const updatedFiles = [...files];
@@ -808,6 +859,7 @@ export default function Home() {
         };
         setFiles(updatedFiles);
         setShowLoader(false);
+        setShowAnalysisOverlay(false);
         messageApi.error(`Analysis failed: ${errorMessage}`);
         setProcessingLogs(prev => [...prev, `Error: ${errorMessage}`]);
     };
@@ -2555,140 +2607,39 @@ export default function Home() {
 
             {/* Analysis Overlay */}
             {showAnalysisOverlay && (
-                <div className="analyzerOverlay" style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 1000,
-                    padding: '20px'
-                }}>
+                <div className="analyzerOverlay">
+                    <style>{animationStyles}</style>
                     <div style={{ maxWidth: '600px', textAlign: 'center' }}>
-                        {/* Loader Animation */}
-                        <div className="loader-container" style={{
-                            marginBottom: '30px',
-                            position: 'relative',
-                            width: '120px',
-                            height: '120px',
-                            margin: '0 auto 30px'
-                        }}>
+                        <div className="loader-container">
                             {progress < 100 ? (
-                                <>
-                                    {/* Book Loading Animation */}
-                                    <div className="book-loading" style={{
-                                        position: 'relative',
-                                        width: '100%',
-                                        height: '100%'
-                                    }}>
-                                        <div className="book" style={{
-                                            position: 'absolute',
-                                            top: '50%',
-                                            left: '50%',
-                                            transform: 'translate(-50%, -50%)',
-                                            width: '80px',
-                                            height: '60px',
-                                            perspective: '1000px'
-                                        }}>
-                                            <div className="page" style={{
-                                                position: 'absolute',
-                                                width: '100%',
-                                                height: '100%',
-                                                border: '2px solid #1890ff',
-                                                borderRadius: '3px',
-                                                transformOrigin: 'left center',
-                                                background: '#fff',
-                                                animation: 'pageFlip 1.5s infinite'
-                                            }}></div>
-                                            <div className="page" style={{
-                                                position: 'absolute',
-                                                width: '100%',
-                                                height: '100%',
-                                                border: '2px solid #1890ff',
-                                                borderRadius: '3px',
-                                                transformOrigin: 'left center',
-                                                background: '#fff',
-                                                animation: 'pageFlip 1.5s infinite 0.3s'
-                                            }}></div>
-                                            <div className="page" style={{
-                                                position: 'absolute',
-                                                width: '100%',
-                                                height: '100%',
-                                                border: '2px solid #1890ff',
-                                                borderRadius: '3px',
-                                                transformOrigin: 'left center',
-                                                background: '#fff',
-                                                animation: 'pageFlip 1.5s infinite 0.6s'
-                                            }}></div>
-                                        </div>
+                                <div className="book-loading">
+                                    <div className="book">
+                                        <div className="page"></div>
+                                        <div className="page"></div>
+                                        <div className="page"></div>
                                     </div>
-                                </>
+                                </div>
                             ) : (
-                                /* Success Animation */
-                                <div className="success-animation" style={{
-                                    position: 'relative',
-                                    width: '100%',
-                                    height: '100%'
-                                }}>
-                                    <div className="checkmark" style={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        width: '80px',
-                                        height: '80px',
-                                        borderRadius: '50%',
-                                        border: '3px solid #52c41a',
-                                        animation: 'scaleIn 0.5s ease-in-out'
-                                    }}>
-                                        <div className="check" style={{
-                                            position: 'absolute',
-                                            top: '50%',
-                                            left: '50%',
-                                            transform: 'translate(-50%, -50%) rotate(45deg)',
-                                            width: '20px',
-                                            height: '40px',
-                                            border: 'solid #52c41a',
-                                            borderWidth: '0 3px 3px 0',
-                                            animation: 'checkmark 0.5s ease-in-out 0.5s forwards'
-                                        }}></div>
+                                <div className="success-animation">
+                                    <div className="checkmark">
+                                        <div className="check"></div>
                                     </div>
                                 </div>
                             )}
                         </div>
 
-                        <div className="processingIndicator" style={{
-                            marginBottom: '30px'
-                        }}>
-                            {/* Progress Bar */}
-                            <div className="progressBar" style={{
-                                width: '100%',
-                                height: '8px',
-                                backgroundColor: '#f0f0f0',
-                                borderRadius: '4px',
-                                marginBottom: '15px',
-                                overflow: 'hidden'
-                            }}>
-                                <div className="progressFill" style={{
-                                    height: '100%',
-                                    width: `${progress}%`,
-                                    backgroundColor: progress === 100 ? '#52c41a' : '#1890ff',
-                                    transition: 'width 0.5s ease-in-out, background-color 0.5s ease-in-out'
-                                }}></div>
+                        <div className="processingIndicator">
+                            <div className="progressBar">
+                                <div 
+                                    className="progressFill" 
+                                    style={{
+                                        width: `${progress}%`,
+                                        backgroundColor: progress === 100 ? '#52c41a' : '#1890ff'
+                                    }}
+                                ></div>
                             </div>
                             
-                            {/* Status Information */}
-                            <div className="statusInfo" style={{
-                                color: '#000000',
-                                marginBottom: '20px',
-                                fontSize: '16px',
-                                fontWeight: 'bold'
-                            }}>
+                            <div className="statusInfo">
                                 <span>{analysisStage}</span>
                                 <div style={{ 
                                     fontSize: '14px', 
@@ -2700,7 +2651,6 @@ export default function Home() {
                                 </div>
                             </div>
                             
-                            {/* Processing details section */}
                             <div style={{
                                 background: '#ffffff',
                                 padding: '15px',
