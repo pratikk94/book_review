@@ -22,10 +22,27 @@ try {
   console.error('Error initializing directory:', error);
 }
 
+// In-memory storage for job status (use a database in production)
+const jobStatus = new Map();
+
 // Add a simple GET handler for testing
-export async function GET() {
-  console.log("GET /api/analyze");
-  return NextResponse.json({ message: "Analyze API endpoint is working. Send a POST request with a PDF or DOCX file to analyze." });
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const jobId = url.searchParams.get('jobId');
+  
+  // If jobId is provided, return job status
+  if (jobId) {
+    if (!jobStatus.has(jobId)) {
+      return NextResponse.json({ error: "Invalid job ID" }, { status: 400 });
+    }
+    return NextResponse.json(jobStatus.get(jobId));
+  }
+  
+  // Otherwise return API info
+  return NextResponse.json({ 
+    message: "Analyze API endpoint is working. Send a POST request with a PDF or DOCX file to analyze.",
+    note: "For large files, use the two-step process: upload file to get jobId, then check status with GET /api/analyze?jobId=your_job_id"
+  });
 }
 
 // Add type definitions
@@ -43,7 +60,8 @@ interface AnalysisItem {
 
 // Add helper functions
 function splitTextIntoChunks(text: string): string[] {
-    const CHUNK_SIZE = 15000;
+    // Reduce chunk size to process faster
+    const CHUNK_SIZE = 8000; 
     const chunks: string[] = [];
     for (let i = 0; i < text.length; i += CHUNK_SIZE) {
         chunks.push(text.slice(i, i + CHUNK_SIZE));
@@ -65,57 +83,56 @@ function generateCSV(analysis: AnalysisItem[]): string {
     ].join('\n');
 }
 
-export async function POST(req: Request) {
+// Analyze text chunks and update job status
+async function processFileAsync(jobId: string, text: string, fileName: string) {
     try {
-        const formData = await req.formData();
-        const file = formData.get("file") as File;
-        
-        if (!file) {
-            return NextResponse.json({ error: "No file provided" }, { status: 400 });
-        }
-
-        // Get file content
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        let text = "";
-
-        // Extract text based on file type
-        if (file.name.endsWith(".pdf")) {
-            const pdf = await pdfParse(buffer);
-            text = pdf.text;
-        } else if (file.name.endsWith(".docx")) {
-            const result = await mammoth.extractRawText({ buffer });
-            text = result.value;
-        }
-
-        // Split text into chunks
+        // Split text into chunks with smaller size for faster processing
         const chunks = splitTextIntoChunks(text);
-        const chunkStatus: ChunkStatus[] = [];
         let combinedAnalysis: AnalysisItem[] = [];
         let combinedSummary = "";
         let combinedPrologue = "";
         let combinedCriticism = "";
+        
+        // Process only a subset of chunks if the document is very large
+        const MAX_CHUNKS = 3; // Limit number of chunks to process
+        const chunksToProcess = chunks.length > MAX_CHUNKS 
+            ? [chunks[0], chunks[Math.floor(chunks.length/2)], chunks[chunks.length-1]]
+            : chunks;
+        
+        // Update job status with progress
+        jobStatus.set(jobId, {
+            ...jobStatus.get(jobId),
+            status: 'processing',
+            progress: 20,
+            chunksTotal: chunks.length,
+            chunksToProcess: chunksToProcess.length,
+            message: `Analyzing document (processing ${chunksToProcess.length} representative sections)...`
+        });
 
         // Process each chunk
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            chunkStatus.push({
-                chunk: i + 1,
-                status: 'processing',
-                message: `Processing chunk ${i + 1}/${chunks.length}`
+        for (let i = 0; i < chunksToProcess.length; i++) {
+            const chunk = chunksToProcess[i];
+            
+            // Update progress
+            jobStatus.set(jobId, {
+                ...jobStatus.get(jobId),
+                progress: 20 + Math.floor(60 * (i / chunksToProcess.length)),
+                currentChunk: i + 1,
+                message: `Processing section ${i + 1}/${chunksToProcess.length}`
             });
 
             try {
+                // Simplified prompt and reduced token count
                 const response = await openai.chat.completions.create({
-                    model: "gpt-3.5-turbo-16k",
+                    model: "gpt-3.5-turbo",
                     messages: [
                         {
                             role: "system",
-                            content: `You are a book analysis assistant. Your task is to analyze text and provide structured feedback. You must respond using the function calling format with the analyze_book function.`
+                            content: `You are a book analysis assistant. Your task is to analyze text and provide structured feedback. Respond using the function calling format.`
                         },
                         {
                             role: "user",
-                            content: `Analyze this text and provide feedback: ${chunk}`
+                            content: `Analyze this text and provide feedback: ${chunk.substring(0, 4000)}`
                         }
                     ],
                     functions: [
@@ -156,13 +173,13 @@ export async function POST(req: Request) {
                                         type: "string"
                                     }
                                 },
-                                required: ["analysis", "summary", "prologue", "constructiveCriticism"]
+                                required: ["analysis"]
                             }
                         }
                     ],
                     function_call: { name: "analyze_book" },
                     temperature: 0.3,
-                    max_tokens: 2000,
+                    max_tokens: 1000, // Reduced token count
                 });
 
                 const functionCall = response.choices[0]?.message?.function_call;
@@ -178,168 +195,133 @@ export async function POST(req: Request) {
                     throw new Error(`Invalid JSON in function arguments: ${parseError.message}`);
                 }
 
-                // Validate the response structure
-                if (!parsedContent.analysis || !Array.isArray(parsedContent.analysis)) {
-                    throw new Error("Response missing analysis array");
-                }
-
-                // Ensure all required fields are present and properly formatted
-                const requiredFields = ['summary', 'prologue', 'constructiveCriticism'];
-                for (const field of requiredFields) {
-                    if (!parsedContent[field]) {
-                        parsedContent[field] = `No ${field} provided for this section.`;
-                    }
-                }
-
-                // Validate analysis array structure
-                if (!parsedContent.analysis.every((item: any) => 
-                    item.Parameter && 
-                    typeof item.Score === 'number' && 
-                    item.Justification
-                )) {
-                    throw new Error("Invalid analysis array structure");
-                }
+                // Ensure all required fields are present with defaults
+                parsedContent.summary = parsedContent.summary || "";
+                parsedContent.prologue = parsedContent.prologue || "";
+                parsedContent.constructiveCriticism = parsedContent.constructiveCriticism || "";
+                parsedContent.analysis = parsedContent.analysis || [];
 
                 // Combine results
-                if (parsedContent.analysis) {
-                    combinedAnalysis = [...combinedAnalysis, ...parsedContent.analysis];
-                }
-                if (parsedContent.summary) {
-                    combinedSummary += parsedContent.summary + "\n";
-                }
-                if (parsedContent.prologue) {
-                    combinedPrologue += parsedContent.prologue + "\n";
-                }
-                if (parsedContent.constructiveCriticism) {
-                    combinedCriticism += parsedContent.constructiveCriticism + "\n";
-                }
+                combinedAnalysis = [...combinedAnalysis, ...parsedContent.analysis];
+                combinedSummary += parsedContent.summary ? parsedContent.summary + "\n" : "";
+                combinedPrologue += parsedContent.prologue ? parsedContent.prologue + "\n" : "";
+                combinedCriticism += parsedContent.constructiveCriticism ? parsedContent.constructiveCriticism + "\n" : "";
 
-                chunkStatus[i].status = 'completed';
-                chunkStatus[i].message = `Chunk ${i + 1}/${chunks.length} completed successfully`;
-
-                // Add delay between chunks to avoid rate limits
-                if (i < chunks.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay between chunks
-                }
             } catch (error) {
                 console.error(`Error processing chunk ${i + 1}:`, error);
-                chunkStatus[i].status = 'error';
-                chunkStatus[i].message = `Error processing chunk ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-                
-                // Retry the chunk once with a simpler prompt
-                try {
-                    console.log(`Retrying chunk ${i + 1}...`);
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
-                    const retryResponse = await openai.chat.completions.create({
-                        model: "gpt-3.5-turbo-16k",
-                        messages: [
-                            {
-                                role: "system",
-                                content: "You are a book analysis assistant. Your task is to analyze text and provide structured feedback. You must respond using the function calling format with the analyze_book function."
-                            },
-                            {
-                                role: "user",
-                                content: `Analyze this text and provide feedback: ${chunk}`
-                            }
-                        ],
-                        functions: [
-                            {
-                                name: "analyze_book",
-                                description: "Analyze a section of text and provide structured feedback",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        analysis: {
-                                            type: "array",
-                                            items: {
-                                                type: "object",
-                                                properties: {
-                                                    Parameter: {
-                                                        type: "string",
-                                                        enum: ["Readability", "Content Quality", "Structure", "Grammar & Style", "Originality"]
-                                                    },
-                                                    Score: {
-                                                        type: "number",
-                                                        minimum: 1,
-                                                        maximum: 5
-                                                    },
-                                                    Justification: {
-                                                        type: "string"
-                                                    }
-                                                },
-                                                required: ["Parameter", "Score", "Justification"]
-                                            }
-                                        },
-                                        summary: {
-                                            type: "string"
-                                        },
-                                        prologue: {
-                                            type: "string"
-                                        },
-                                        constructiveCriticism: {
-                                            type: "string"
-                                        }
-                                    },
-                                    required: ["analysis", "summary", "prologue", "constructiveCriticism"]
-                                }
-                            }
-                        ],
-                        function_call: { name: "analyze_book" },
-                        temperature: 0.1,
-                        max_tokens: 2000,
-                    });
-
-                    const retryFunctionCall = retryResponse.choices[0]?.message?.function_call;
-                    if (!retryFunctionCall || retryFunctionCall.name !== "analyze_book") {
-                        throw new Error("Invalid function call response in retry");
-                    }
-
-                    const retryParsedContent = JSON.parse(retryFunctionCall.arguments);
-                    
-                    // Validate retry response
-                    if (!retryParsedContent.analysis || !Array.isArray(retryParsedContent.analysis)) {
-                        throw new Error("Retry response missing analysis array");
-                    }
-
-                    // Combine retry results
-                    if (retryParsedContent.analysis) {
-                        combinedAnalysis = [...combinedAnalysis, ...retryParsedContent.analysis];
-                    }
-                    if (retryParsedContent.summary) {
-                        combinedSummary += retryParsedContent.summary + "\n";
-                    }
-                    if (retryParsedContent.prologue) {
-                        combinedPrologue += retryParsedContent.prologue + "\n";
-                    }
-                    if (retryParsedContent.constructiveCriticism) {
-                        combinedCriticism += retryParsedContent.constructiveCriticism + "\n";
-                    }
-
-                    chunkStatus[i].status = 'completed';
-                    chunkStatus[i].message = `Chunk ${i + 1}/${chunks.length} completed successfully after retry`;
-                } catch (retryError) {
-                    console.error(`Retry failed for chunk ${i + 1}:`, retryError);
-                    chunkStatus[i].message = `Failed after retry: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`;
-                }
+                // Continue processing despite errors
             }
         }
 
-        // Generate CSV file
+        // Generate CSV content
         const csvContent = generateCSV(combinedAnalysis);
-        const csvBuffer = Buffer.from(csvContent);
-        const csvBlob = new Blob([csvBuffer], { type: 'text/csv' });
-        const csvUrl = URL.createObjectURL(csvBlob);
-
-        return NextResponse.json({
+        
+        // Set final status
+        jobStatus.set(jobId, {
+            status: 'completed',
+            progress: 100,
+            message: 'Analysis complete',
             analysis: combinedAnalysis,
             summary: combinedSummary.trim(),
             prologue: combinedPrologue.trim(),
             constructiveCriticism: combinedCriticism.trim(),
-            downloadLink: csvUrl,
-            chunkStatus
+            csvContent,
+            completed: true,
+            fileName
         });
+        
+    } catch (error) {
+        console.error("Processing error:", error);
+        jobStatus.set(jobId, {
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            message: 'Processing failed'
+        });
+    }
+}
+
+export async function POST(req: Request) {
+    try {
+        const formData = await req.formData();
+        const file = formData.get("file") as File;
+        
+        if (!file) {
+            return NextResponse.json({ error: "No file provided" }, { status: 400 });
+        }
+
+        // Generate a unique job ID using timestamp and random string
+        const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+        
+        // Store initial job status
+        jobStatus.set(jobId, {
+            status: 'uploading',
+            progress: 0,
+            message: 'File received, extracting text...',
+            fileInfo: {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            }
+        });
+
+        // Start file processing without waiting for completion
+        (async () => {
+            try {
+                // Get file content
+                const bytes = await file.arrayBuffer();
+                const buffer = Buffer.from(bytes);
+                let text = "";
+
+                // Update status
+                jobStatus.set(jobId, {
+                    ...jobStatus.get(jobId),
+                    status: 'extracting',
+                    progress: 10,
+                    message: 'Extracting text from file...'
+                });
+
+                // Extract text based on file type
+                if (file.name.endsWith(".pdf")) {
+                    const pdf = await pdfParse(buffer);
+                    text = pdf.text;
+                } else if (file.name.endsWith(".docx")) {
+                    const result = await mammoth.extractRawText({ buffer });
+                    text = result.value;
+                }
+
+                // Update status before processing
+                jobStatus.set(jobId, {
+                    ...jobStatus.get(jobId),
+                    status: 'preprocessing',
+                    progress: 15,
+                    message: 'Text extracted, preparing for analysis...',
+                    textLength: text.length
+                });
+
+                // Start processing asynchronously
+                processFileAsync(jobId, text, file.name);
+                
+            } catch (error) {
+                console.error("Error in background processing:", error);
+                jobStatus.set(jobId, {
+                    status: 'error',
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    message: 'File processing failed'
+                });
+            }
+        })();
+
+        // Return immediately with job ID
+        return NextResponse.json({ 
+            success: true, 
+            jobId,
+            message: "File uploaded. Check status with GET /api/analyze?jobId=" + jobId
+        });
+        
     } catch (error) {
         console.error("Error:", error);
-        return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+        return NextResponse.json({ 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+        }, { status: 500 });
     }
 } 

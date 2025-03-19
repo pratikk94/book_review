@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Layout, Upload, Button, Table, Spin, Alert, Card, Row, Col, Typography, Divider, Progress, message, Modal } from "antd";
 import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined } from "@ant-design/icons";
 import domtoimage from 'dom-to-image';
@@ -178,10 +178,83 @@ export default function Home() {
     const [pdfSuccess, setPdfSuccess] = useState(false);
     const [processingLogs, setProcessingLogs] = useState<string[]>([]);
     const [showAnalysisOverlay, setShowAnalysisOverlay] = useState(false);
+    const [jobId, setJobId] = useState<string | null>(null);
     
     // Refs for capturing PDF content
     const editorialContentRef = useRef<HTMLDivElement>(null);
     const analysisContentRef = useRef<HTMLDivElement>(null);
+    
+    // Poll for job status if we have a jobId
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        
+        if (jobId && loading) {
+            interval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/analyze?jobId=${jobId}`);
+                    if (!response.ok) {
+                        throw new Error(`Status check failed: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log("Job status:", data);
+                    
+                    // Update UI based on status
+                    if (data.progress !== undefined) {
+                        setProgress(data.progress);
+                    }
+                    
+                    if (data.message) {
+                        setAnalysisStage(data.message);
+                        setProcessingLogs(prev => [...prev, data.message]);
+                    }
+                    
+                    // Check if processing is complete
+                    if (data.status === 'completed' && data.completed) {
+                        clearInterval(interval);
+                        setLoading(false);
+                        setProgress(100);
+                        setAnalysisStage("Analysis complete!");
+                        setShowAnalysisOverlay(false);
+                        
+                        // Update UI with results
+                        if (data.analysis) {
+                            setAnalysis(data.analysis);
+                            setSummary(data.summary || "");
+                            setPrologue(data.prologue || "");
+                            setConstructiveCriticism(data.constructiveCriticism || "");
+                            
+                            // Create a downloadable CSV link if csvContent exists
+                            if (data.csvContent) {
+                                const csvBlob = new Blob([data.csvContent], { type: 'text/csv' });
+                                const csvUrl = URL.createObjectURL(csvBlob);
+                                setDownloadLink(csvUrl);
+                            }
+                        }
+                    }
+                    
+                    // Handle error state
+                    if (data.status === 'error') {
+                        clearInterval(interval);
+                        setLoading(false);
+                        setProgress(100);
+                        setAnalysisStage("Analysis failed!");
+                        setProcessingLogs(prev => [...prev, `Error: ${data.error || "Unknown error"}`]);
+                        alert(`Analysis failed! ${data.error || "Unknown error"}`);
+                        setShowAnalysisOverlay(false);
+                    }
+                    
+                } catch (error) {
+                    console.error("Error checking job status:", error);
+                    setProcessingLogs(prev => [...prev, `Error checking status: ${error}`]);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+        
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [jobId, loading]);
     
     const handleFileChange = (info: any) => {
         const file = info?.fileList?.[0]?.originFileObj;
@@ -200,6 +273,7 @@ export default function Home() {
     const handleUpload = async () => {
         if (!file) return alert("Please select a file first!");
         setLoading(true);
+        setJobId(null);
         
         // Reset states
         setAnalysis([]);
@@ -213,24 +287,7 @@ export default function Home() {
         setProgress(0);
         setAnalysisStage("Uploading file...");
         setProcessingLogs(prev => [...prev, "Starting analysis..."]);
-        const progressInterval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 90) {
-                    clearInterval(progressInterval);
-                    setShowAnalysisOverlay(true);
-                    return 90;
-                }
-                return prev + 10;
-            });
-            
-            // Update the stage text based on progress
-            if (progress < 20) setAnalysisStage("Uploading file...");
-            else if (progress < 40) setAnalysisStage("Extracting text...");
-            else if (progress < 60) setAnalysisStage("Analyzing content...");
-            else if (progress < 80) setAnalysisStage("Generating insights...");
-            else setAnalysisStage("Finalizing report...");
-            
-        }, 1500);
+        setShowAnalysisOverlay(true);
 
         const formData = new FormData();
         formData.append("file", file);
@@ -248,48 +305,41 @@ export default function Home() {
             const data = await response.json();
             console.log("API Response:", data);
             
-            // Set progress to 100% when complete
-            clearInterval(progressInterval);
-            setProgress(100);
-            setAnalysisStage("Analysis complete!");
-            
-            // Update processing logs with chunk status
-            if (data.chunkStatus) {
-                data.chunkStatus.forEach((status: { chunk: number; status: string; message: string }) => {
-                    setProcessingLogs(prev => [...prev, status.message]);
-                });
-            }
-            
-            if (data.analysis) {
-                // Handle full analysis response
-                setAnalysis(data.analysis);
-                setSummary(data.summary || "");
-                setPrologue(data.prologue || "");
-                setConstructiveCriticism(data.constructiveCriticism || "");
-                setDownloadLink(data.downloadLink);
-            } else if (data.success) {
-                // Handle simplified test response
-                setAnalysis([{
-                    Parameter: "File Upload",
-                    Score: 5,
-                    Justification: `File successfully uploaded: ${data.fileName || file.name} (${data.fileSize || file.size} bytes)`
-                }]);
+            if (data.jobId) {
+                // We received a job ID - set it and continue polling for status
+                setJobId(data.jobId);
+                setAnalysisStage(data.message || "Processing file...");
+                setProcessingLogs(prev => [...prev, data.message || "Job started"]);
             } else {
-                throw new Error("Invalid response format");
+                // Handle immediate response (unlikely with the new API)
+                setLoading(false);
+                setProgress(100);
+                setAnalysisStage("Analysis complete!");
+                
+                if (data.analysis) {
+                    setAnalysis(data.analysis);
+                    setSummary(data.summary || "");
+                    setPrologue(data.prologue || "");
+                    setConstructiveCriticism(data.constructiveCriticism || "");
+                    setDownloadLink(data.downloadLink);
+                } else if (data.success) {
+                    setAnalysis([{
+                        Parameter: "File Upload",
+                        Score: 5,
+                        Justification: `File successfully uploaded: ${data.fileName || file.name} (${data.fileSize || file.size} bytes)`
+                    }]);
+                }
+                
+                setShowAnalysisOverlay(false);
             }
-            
-            // Hide overlay when complete
-            setShowAnalysisOverlay(false);
         } catch (error) {
             console.error("Error:", error);
-            clearInterval(progressInterval);
+            setLoading(false);
             setProgress(100);
             setAnalysisStage("Analysis failed!");
             setProcessingLogs(prev => [...prev, `Error: ${error}`]);
             alert(`Analysis failed! ${error}`);
             setShowAnalysisOverlay(false);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -706,15 +756,23 @@ export default function Home() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '0 20px'
+                padding: '0 20px',
+                height: 'auto',
+                minHeight: '64px'
             }}>
                 <BookOutlined style={{ fontSize: 24, marginRight: 10 }} />
-                <h1 style={{ margin: 0, fontSize: '1.5rem' }}>📖 eBook AI Analyzer</h1>
+                <h1 style={{ 
+                    margin: 0, 
+                    fontSize: '1.5rem',
+                    padding: '12px 0'
+                }}>
+                    📖 eBook AI Analyzer
+                </h1>
             </Header>
             
             <Content style={{ padding: '20px' }}>
                 <Row justify="center" gutter={[16, 24]}>
-                    <Col xs={24} sm={20} md={16} lg={12} xl={10}>
+                    <Col xs={24} sm={22} md={18} lg={14} xl={12}>
                         <Card 
                             title={
                                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -735,8 +793,8 @@ export default function Home() {
                                 showUploadList={true}
                                 maxCount={1}
                                 beforeUpload={(file) => {
-                                    const isValidType = file.type === 'application/pdf' || 
-                                                      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                                    const fileType = file.name.toLowerCase().split('.').pop();
+                                    const isValidType = fileType === 'pdf' || fileType === 'docx';
                                     if (!isValidType) {
                                         message.error('Please upload a PDF or DOCX file');
                                     }
@@ -775,6 +833,32 @@ export default function Home() {
                                 <div style={{ marginTop: '20px', textAlign: 'center' }}>
                                     <Progress percent={progress} status="active" />
                                     <p style={{ marginTop: '10px', color: '#1890ff' }}>{analysisStage}</p>
+                                    
+                                    {/* Processing Logs Section */}
+                                    <div style={{ 
+                                        marginTop: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#f5f5f5',
+                                        borderRadius: '4px',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        textAlign: 'left'
+                                    }}>
+                                        <h4 style={{ marginBottom: '8px', color: '#1890ff' }}>Processing Logs:</h4>
+                                        {processingLogs.map((log, index) => (
+                                            <div 
+                                                key={index}
+                                                style={{ 
+                                                    padding: '4px 0',
+                                                    fontSize: '14px',
+                                                    color: '#666',
+                                                    borderBottom: index < processingLogs.length - 1 ? '1px solid #eee' : 'none'
+                                                }}
+                                            >
+                                                {log}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </Card>
@@ -783,55 +867,59 @@ export default function Home() {
 
                 {analysis?.length > 0 && (
                     <>
-                        {/* Generate DOCX Report Button */}
+                        {/* Generate Report Buttons - Made more responsive with proper className approach */}
                         <Row justify="center" style={{ marginTop: '20px' }}>
-                            <Button 
-                                type="primary"
-                                icon={<FilePdfOutlined />}
-                                onClick={generateDocx}
-                                loading={capturingPdf}
-                                size="large"
-                                className="pdf-button"
-                                style={{
-                                    height: 'auto',
-                                    padding: '10px 24px',
-                                    fontSize: '16px',
-                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                                }}
-                            >
-                                Generate Analysis Report (DOCX)
-                            </Button>
-                            
-                            <Button 
-                                type="default"
-                                icon={<FilePdfOutlined />}
-                                onClick={generateSimplePdf}
-                                size="middle"
-                                style={{
-                                    marginLeft: '10px',
-                                    height: 'auto',
-                                    padding: '8px 15px',
-                                }}
-                            >
-                                Text-Only Report
-                            </Button>
-                            
-                            {pdfSuccess && (
-                                <Alert
-                                    message="DOCX Report Generated Successfully"
-                                    description="Your DOCX has been saved to your downloads folder."
-                                    type="success"
-                                    showIcon
-                                    closable
-                                    onClose={() => setPdfSuccess(false)}
-                                    className="pdf-success"
-                                    style={{ 
-                                        marginTop: '10px',
-                                        width: '100%',
-                                        maxWidth: '600px',
+                            <Col xs={24} sm={22} md={20} lg={18} xl={16} style={{ textAlign: 'center' }}>
+                                <Button 
+                                    type="primary"
+                                    icon={<FilePdfOutlined />}
+                                    onClick={generateDocx}
+                                    loading={capturingPdf}
+                                    size="large"
+                                    className="pdf-button mobile-responsive-button"
+                                    style={{
+                                        height: 'auto',
+                                        padding: '10px 24px',
+                                        fontSize: '16px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                                     }}
-                                />
-                            )}
+                                >
+                                    Generate Analysis Report (DOCX)
+                                </Button>
+                                
+                                <Button 
+                                    type="default"
+                                    icon={<FilePdfOutlined />}
+                                    onClick={generateSimplePdf}
+                                    size="middle"
+                                    className="secondary-button mobile-responsive-button"
+                                    style={{
+                                        marginLeft: '10px',
+                                        height: 'auto',
+                                        padding: '8px 15px'
+                                    }}
+                                >
+                                    Text-Only Report
+                                </Button>
+                                
+                                {pdfSuccess && (
+                                    <Alert
+                                        message="DOCX Report Generated Successfully"
+                                        description="Your DOCX has been saved to your downloads folder."
+                                        type="success"
+                                        showIcon
+                                        closable
+                                        onClose={() => setPdfSuccess(false)}
+                                        className="pdf-success"
+                                        style={{ 
+                                            marginTop: '10px',
+                                            width: '100%',
+                                            maxWidth: '600px',
+                                            margin: '10px auto'
+                                        }}
+                                    />
+                                )}
+                            </Col>
                         </Row>
 
                         {/* Editorial Feedback Card - Separate prominent section */}
@@ -1114,7 +1202,11 @@ export default function Home() {
                 )}
             </Content>
             
-            <Footer style={{ textAlign: 'center', background: '#f0f2f5' }}>
+            <Footer style={{ 
+                textAlign: 'center', 
+                background: '#f0f2f5',
+                padding: '10px'
+            }}>
                 eBook AI Analyzer ©{new Date().getFullYear()} - Powered by Next.js and OpenAI
             </Footer>
 
