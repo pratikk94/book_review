@@ -701,7 +701,7 @@ export default function Home() {
     const [messageApi, contextHolder] = message.useMessage();
 
     // Add these near the other state variables
-    const [vercelDeployment, setVercelDeployment] = useState(false);
+    const [vercelDeployment, setVercelDeployment] = useState(true); // Set to true by default for serverless operation
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
     
     // Add this to the component
@@ -906,14 +906,21 @@ export default function Home() {
         checkFinalResult(false);
     };
     
-    // Simple progress checker for Vercel deployments where we can't use in-memory job status
+    // Improved serverless progress checker
     const startSimpleProgressCheck = () => {
         // Use artificial progress as fallback
-        let artificialProgress = 20;
-        setVercelDeployment(true); // Set vercelDeployment flag for better UI
+        let artificialProgress = 10;
+        let checkCounter = 0;
         
-        // Set up periodic checks for results
+        // Clear any existing interval
+        if (resultCheckIntervalRef.current) {
+            clearInterval(resultCheckIntervalRef.current);
+        }
+        
+        // Set up periodic checks for results with exponential backoff
         const autoCheckInterval = setInterval(() => {
+            checkCounter++;
+            
             // Try to get final results without showing errors
             fetch(`/api/analyze?finalResult=true&jobId=${jobId}`)
                 .then(response => {
@@ -928,16 +935,24 @@ export default function Home() {
                         setProgress(100);
                         setAnalysisStage("Analysis complete!");
                         setShowAnalysisOverlay(false);
+                        resultCheckIntervalRef.current = null;
                         
                         // Update UI with results
                         setAnalysis(data.analysis);
                         setSummary(data.summary || "");
                         setPrologue(data.prologue || "");
                         setConstructiveCriticism(data.constructiveCriticism || "");
+                        
+                        // Notify user of completion
+                        message.success("Analysis completed successfully!", 5);
                     } else {
                         // Still processing, increase progress gradually
-                        artificialProgress = Math.min(artificialProgress + 2, 90);
+                        // Calculate progress in a way that never quite reaches 100%
+                        artificialProgress = Math.min(artificialProgress + (4 - (0.1 * checkCounter)), 95);
                         setProgress(artificialProgress);
+                        
+                        // Update UI with more specific messages based on progress
+                        updateProgressStage(artificialProgress);
                     }
                 })
                 .catch(error => {
@@ -945,17 +960,41 @@ export default function Home() {
                     // Increase progress more slowly if we're getting errors
                     artificialProgress = Math.min(artificialProgress + 1, 90);
                     setProgress(artificialProgress);
+                    
+                    // Update UI with progress message
+                    updateProgressStage(artificialProgress);
                 });
-        }, 15000); // Check every 15 seconds
+                
+            // Dynamic interval timing - Start frequent and slow down
+            if (checkCounter > 10) {
+                // After 10 checks (~2 minutes), slow down the interval
+                clearInterval(autoCheckInterval);
+                resultCheckIntervalRef.current = setInterval(startSimpleProgressCheck, 30000); // Every 30 seconds
+            }
+        }, 12000); // Every 12 seconds initially
         
         // Store interval ref so we can clear it when needed
         resultCheckIntervalRef.current = autoCheckInterval;
         
-        // Update stages based on progress for better UX
-        if (artificialProgress < 30) setAnalysisStage("Extracting text from document...");
-        else if (artificialProgress < 50) setAnalysisStage("Analyzing content...");
-        else if (artificialProgress < 70) setAnalysisStage("Generating insights...");
-        else setAnalysisStage("Finalizing report...");
+        // Update UI with initial progress stage
+        updateProgressStage(artificialProgress);
+    };
+    
+    // Helper function to update progress stage based on progress percentage
+    const updateProgressStage = (progress: number) => {
+        if (progress < 20) {
+            setAnalysisStage("Extracting text from document...");
+        } else if (progress < 40) {
+            setAnalysisStage("Analyzing document structure...");
+        } else if (progress < 60) {
+            setAnalysisStage("Processing content and relationships...");
+        } else if (progress < 75) {
+            setAnalysisStage("Generating insights...");
+        } else if (progress < 85) {
+            setAnalysisStage("Evaluating narrative elements...");
+        } else {
+            setAnalysisStage("Finalizing analysis...");
+        }
     };
     
     // Check for final result directly instead of relying on status updates
@@ -1102,7 +1141,8 @@ export default function Home() {
                             'x-plot-analysis': 'enabled',
                             'x-theme-analysis': 'enabled',
                             'x-exclude-authors': 'true',
-                            'x-character-filter': 'strict'
+                            'x-character-filter': 'strict',
+                            'x-serverless-mode': 'true' // Add header to signal serverless mode to backend
                         }
                     });
 
@@ -1121,6 +1161,7 @@ export default function Home() {
                     }
                     
                     if (data.jobId) {
+                        setJobId(data.jobId); // Set job ID at the top level for easier access
                         setFiles(prev => prev.map((f, i) => 
                             i === index ? { ...f, jobId: data.jobId } : f
                         ));
@@ -1128,16 +1169,13 @@ export default function Home() {
                         setProcessingLogs(prev => [
                             ...prev, 
                             `Analysis started for ${fileStatus.file.name}`,
-                            'Analyzing content structure...',
-                            'Processing character relationships...',
-                            'Evaluating narrative elements...',
-                            'Analyzing world-building elements...',
-                            'Examining plot structure...',
-                            'Identifying themes and motifs...'
+                            'Processing in serverless mode...',
+                            'Your file is being analyzed in the background...',
+                            'Results will appear when processing is complete.'
                         ]);
                         
-                        // Start polling for job status
-                        pollJobStatus(data.jobId, index);
+                        // Start serverless progress check immediately
+                        startSimpleProgressCheck();
                     } else {
                         throw new Error('No job ID received from server');
                     }
@@ -2405,6 +2443,50 @@ export default function Home() {
             setCapturingPdf(false);
         }
     };
+
+    // Initialize for serverless operation
+    useEffect(() => {
+        // Initialize app for serverless mode
+        if (typeof window !== 'undefined') {
+            console.log('Initializing app in serverless mode');
+            
+            // Handle page visibility change to check for results when user returns to tab
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && jobId && progress < 100 && progress > 10) {
+                    console.log('Page became visible, checking for results...');
+                    checkForResults();
+                }
+            });
+            
+            // Save job ID in sessionStorage for recovery if page refreshes
+            if (jobId) {
+                sessionStorage.setItem('currentJobId', jobId);
+            } else {
+                const savedJobId = sessionStorage.getItem('currentJobId');
+                if (savedJobId && !analysis.length) {
+                    console.log('Recovered job ID from session:', savedJobId);
+                    setJobId(savedJobId);
+                    // Try to get results for the saved job ID
+                    fetch(`/api/analyze?finalResult=true&jobId=${savedJobId}`)
+                        .then(response => response.ok ? response.json() : null)
+                        .then(data => {
+                            if (data && data.analysis) {
+                                setAnalysis(data.analysis);
+                                setSummary(data.summary || "");
+                                setPrologue(data.prologue || "");
+                                setConstructiveCriticism(data.constructiveCriticism || "");
+                                message.success('Recovered your previous analysis!');
+                                setShowAnalysisOverlay(false);
+                            }
+                        })
+                        .catch(() => {
+                            // Clear saved job ID if it's no longer valid
+                            sessionStorage.removeItem('currentJobId');
+                        });
+                }
+            }
+        }
+    }, [jobId]);
 
     return (
         <AntApp>
@@ -3895,22 +3977,59 @@ export default function Home() {
 
                         <div className="processingIndicator">
                             {vercelDeployment ? (
-                                <div className="funny-loading-messages">
-                                    {funnyLoadingMessages.map((message, index) => (
+                                <div className="serverless-processing">
+                                    {/* Show progress bar in serverless mode too */}
+                                    <div className="progressBar" style={{ marginBottom: '15px' }}>
                                         <div 
-                                            key={index} 
-                                            className={`loading-message ${index === loadingMessageIndex ? 'active' : ''}`}
-                                        >
-                                            {message}
+                                            className="progressFill" 
+                                            style={{
+                                                width: `${progress}%`,
+                                                backgroundColor: progress === 100 ? '#52c41a' : '#1890ff',
+                                                transition: 'width 0.8s ease-in-out'
+                                            }}
+                                        ></div>
+                                    </div>
+                                    
+                                    <div className="statusInfo" style={{ marginBottom: '15px' }}>
+                                        <span>{analysisStage}</span>
+                                        <div style={{ 
+                                            fontSize: '14px', 
+                                            opacity: 0.8, 
+                                            marginTop: '5px',
+                                            color: progress === 100 ? '#52c41a' : '#1890ff'
+                                        }}>
+                                            {progress}% Complete (Estimate)
                                         </div>
-                                    ))}
-                                    <Button 
-                                        type="primary" 
-                                        onClick={checkForResults} 
-                                        style={{ marginTop: '30px' }}
-                                    >
-                                        Check for Results
-                                    </Button>
+                                    </div>
+                                
+                                    <div className="funny-loading-messages">
+                                        {funnyLoadingMessages.map((message, index) => (
+                                            <div 
+                                                key={index} 
+                                                className={`loading-message ${index === loadingMessageIndex ? 'active' : ''}`}
+                                            >
+                                                {message}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div style={{ marginTop: '30px' }}>
+                                        <Button 
+                                            type="primary" 
+                                            onClick={checkForResults} 
+                                            style={{ marginRight: '10px' }}
+                                        >
+                                            Check for Results
+                                        </Button>
+                                        
+                                        <Button 
+                                            onClick={() => {
+                                                window.location.reload();
+                                            }}
+                                        >
+                                            Restart Analysis
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : (
                                 <>
