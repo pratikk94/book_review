@@ -738,19 +738,6 @@ export default function Home() {
         };
     }, [vercelDeployment, showAnalysisOverlay, funnyLoadingMessages.length]);
     
-    // In the startSimpleProgressCheck function, add this line:
-    const startSimpleProgressCheck = () => {
-        setVercelDeployment(true);
-        // Rest of the existing function...
-    };
-    
-    // Also update in the useEffect polling job status, when handling "vercelDeployment" status:
-    if (data.vercelDeployment) {
-        console.log("Received vercelDeployment status - job status not found but continuing processing");
-        setVercelDeployment(true);
-        // Rest of existing code...
-    }
-    
     // Enhanced polling logic for job status that's more resilient to errors
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -780,6 +767,7 @@ export default function Home() {
                                 "The results will appear here when ready. You can refresh the page later to check."
                             ]);
                             setShowAnalysisOverlay(false);
+                            setVercelDeployment(true);
                             
                             // Show fallback message to user
                             message.info(
@@ -885,6 +873,7 @@ export default function Home() {
     const startSimpleProgressCheck = () => {
         // Use artificial progress as fallback
         let artificialProgress = 20;
+        setVercelDeployment(true); // Set vercelDeployment flag for better UI
         const progressInterval = setInterval(() => {
             if (artificialProgress >= 90) {
                 clearInterval(progressInterval);
@@ -1142,7 +1131,7 @@ export default function Home() {
             // Special handling for Vercel deployments where job status is lost between serverless function calls
             if (data.vercelDeployment) {
                 console.log("Received vercelDeployment status - job status not found but continuing processing");
-                setVercelDeployment(true);
+                setVercelDeployment(true); // Set flag for better UI experience
                 
                 // Update progress but not too quickly to avoid false completions
                 const currentProgress = progress || 0;
@@ -3814,13 +3803,25 @@ export default function Home() {
                     <div style={{ maxWidth: '600px', textAlign: 'center' }}>
                         <div className="loader-container">
                             {progress < 100 ? (
-                                <div className="book-loading">
-                                    <div className="book">
-                                        <div className="page"></div>
-                                        <div className="page"></div>
-                                        <div className="page"></div>
+                                vercelDeployment ? (
+                                    <div className="brain-container">
+                                        <div className="brain">🧠</div>
+                                        <div className="ai-message">AI Analyzing Book</div>
+                                        <div className="thinking-dots">
+                                            <div className="dot"></div>
+                                            <div className="dot"></div>
+                                            <div className="dot"></div>
+                                        </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="book-loading">
+                                        <div className="book">
+                                            <div className="page"></div>
+                                            <div className="page"></div>
+                                            <div className="page"></div>
+                                        </div>
+                                    </div>
+                                )
                             ) : (
                                 <div className="success-animation">
                                     <div className="checkmark">
@@ -3831,27 +3832,42 @@ export default function Home() {
                         </div>
 
                         <div className="processingIndicator">
-                            <div className="progressBar">
-                                <div 
-                                    className="progressFill" 
-                                    style={{
-                                        width: `${progress}%`,
-                                        backgroundColor: progress === 100 ? '#52c41a' : '#1890ff'
-                                    }}
-                                ></div>
-                            </div>
-                            
-                            <div className="statusInfo">
-                                <span>{analysisStage}</span>
-                                <div style={{ 
-                                    fontSize: '14px', 
-                                    opacity: 0.8, 
-                                    marginTop: '5px',
-                                    color: progress === 100 ? '#52c41a' : '#1890ff'
-                                }}>
-                                    {progress}% Complete
+                            {vercelDeployment ? (
+                                <div className="funny-loading-messages">
+                                    {funnyLoadingMessages.map((message, index) => (
+                                        <div 
+                                            key={index} 
+                                            className={`loading-message ${index === loadingMessageIndex ? 'active' : ''}`}
+                                        >
+                                            {message}
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
+                            ) : (
+                                <>
+                                    <div className="progressBar">
+                                        <div 
+                                            className="progressFill" 
+                                            style={{
+                                                width: `${progress}%`,
+                                                backgroundColor: progress === 100 ? '#52c41a' : '#1890ff'
+                                            }}
+                                        ></div>
+                                    </div>
+                                    
+                                    <div className="statusInfo">
+                                        <span>{analysisStage}</span>
+                                        <div style={{ 
+                                            fontSize: '14px', 
+                                            opacity: 0.8, 
+                                            marginTop: '5px',
+                                            color: progress === 100 ? '#52c41a' : '#1890ff'
+                                        }}>
+                                            {progress}% Complete
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                             
                             <div style={{
                                 background: '#ffffff',
@@ -3879,7 +3895,7 @@ export default function Home() {
                         marginTop: '20px',
                         transition: 'color 0.5s ease-in-out'
                     }}>
-                        {progress === 100 ? 'Analysis Complete!' : jobId ? 'Analyzing Your Book' : 'Preparing Analysis'}
+                        {progress === 100 ? 'Analysis Complete!' : vercelDeployment ? 'Processing in the Cloud' : jobId ? 'Analyzing Your Book' : 'Preparing Analysis'}
                     </Typography.Title>
                 </div>
             )}
