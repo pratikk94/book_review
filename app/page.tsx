@@ -130,75 +130,41 @@ interface AnalysisResults {
 
 // Create a PDF Document component
 const AnalysisReport = ({ data, fileName }) => (
-  <Document title={`${fileName || "eBook"} Analysis Report`}>
-    <Page size="A4" style={pdfStyles.page}>
-      <View style={pdfStyles.section}>
-        <PDFText style={pdfStyles.title}>eBook AI Analysis Report</PDFText>
-        <PDFText style={pdfStyles.text}>File: {fileName || "eBook Analysis"}</PDFText>
-        <PDFText style={pdfStyles.text}>Generated: {new Date().toLocaleDateString()}</PDFText>
-      </View>
-      
-      {data.summary && (
-        <View style={pdfStyles.section}>
-          <PDFText style={pdfStyles.title}>Book Summary</PDFText>
-          <PDFText style={pdfStyles.text}>{data.summary}</PDFText>
-        </View>
-      )}
-    </Page>
-    
-    {data.prologue && (
-      <Page size="A4" style={pdfStyles.page}>
-        <View style={pdfStyles.section}>
-          <PDFText style={pdfStyles.title}>Compelling Prologue</PDFText>
-          <PDFText style={pdfStyles.text}>{data.prologue}</PDFText>
-        </View>
-      </Page>
-    )}
-    
-    <Page size="A4" style={pdfStyles.page}>
-      <View style={pdfStyles.section}>
-        <PDFText style={pdfStyles.title}>Overall Assessment</PDFText>
-        <View style={pdfStyles.scoreContainer}>
-          <PDFText style={pdfStyles.scoreLabel}>Overall Score:</PDFText>
-          <PDFText style={pdfStyles.scoreValue}>{data.overallScore}/5</PDFText>
-        </View>
-        
-        <PDFText style={pdfStyles.subtitle}>Strengths:</PDFText>
-        {data.strengths?.map((strength, index) => (
-          <PDFText key={`strength-${index}`} style={pdfStyles.text}>• {strength}</PDFText>
-        ))}
-        
-        <PDFText style={pdfStyles.subtitle}>Areas for Improvement:</PDFText>
-        {data.areasForImprovement?.map((area, index) => (
-          <PDFText key={`area-${index}`} style={pdfStyles.text}>• {area}</PDFText>
-        ))}
-      </View>
-    </Page>
-    
-    <Page size="A4" style={pdfStyles.page}>
-      <View style={pdfStyles.section}>
-        <PDFText style={pdfStyles.title}>Detailed Analysis</PDFText>
-        <View style={[pdfStyles.tableRow, pdfStyles.tableHeader]}>
-          <PDFText style={pdfStyles.tableCell}>Parameter</PDFText>
-          <PDFText style={pdfStyles.tableCell}>Score</PDFText>
-          <PDFText style={pdfStyles.tableCell}>Analysis</PDFText>
-        </View>
-        
-        {data.analysisData?.map((item, index) => (
-          <View key={`item-${index}`} style={pdfStyles.tableRow}>
-            <PDFText style={pdfStyles.tableCell}>{item.parameter}</PDFText>
-            <PDFText style={pdfStyles.tableCell}>{item.score}/5</PDFText>
-            <PDFText style={pdfStyles.tableCell}>{item.analysis}</PDFText>
-          </View>
-        ))}
-      </View>
-      
-      <PDFText style={pdfStyles.footer}>eBook AI Analyzer Report</PDFText>
-      <PDFText style={pdfStyles.pageNumber} render={({ pageNumber, totalPages }) => (
-        `Page ${pageNumber} of ${totalPages}`
-      )} />
-    </Page>
-  </Document>
+    <Document title={`${fileName || "eBook"} Analysis Report`}>
+        <Page size="A4" style={pdfStyles.page}>
+            <View style={pdfStyles.section}>
+                <PDFText style={pdfStyles.title}>eBook AI Analysis Report</PDFText>
+                <PDFText style={pdfStyles.text}>File: {fileName || "eBook Analysis"}</PDFText>
+                <PDFText style={pdfStyles.text}>Generated: {new Date().toLocaleDateString()}</PDFText>
+            </View>
+
+            {/* Prompt-wise Analysis Section */}
+            <View style={pdfStyles.section}>
+                <PDFText style={pdfStyles.title}>Prompt-wise Analysis</PDFText>
+                {data.analysis?.map((item, index) => (
+                    <View key={index} style={pdfStyles.section}>
+                        <PDFText style={pdfStyles.subtitle}>{item.Parameter}</PDFText>
+                        <View style={pdfStyles.scoreContainer}>
+                            <PDFText style={pdfStyles.scoreLabel}>Score:</PDFText>
+                            <PDFText style={pdfStyles.scoreValue}>
+                                {item.Score > 5 ? (item.Score / 2).toFixed(1) : item.Score}/5
+                            </PDFText>
+                        </View>
+                        <PDFText style={pdfStyles.text}>{item.Justification}</PDFText>
+                    </View>
+                ))}
+            </View>
+
+            {/* Overall Score Section */}
+            <View style={pdfStyles.section}>
+                <PDFText style={pdfStyles.title}>Overall Assessment</PDFText>
+                <View style={pdfStyles.scoreContainer}>
+                    <PDFText style={pdfStyles.scoreLabel}>Overall Score:</PDFText>
+                    <PDFText style={pdfStyles.scoreValue}>{data.totalScore}/5</PDFText>
+                </View>
+            </View>
+        </Page>
+    </Document>
 );
 
 export default function Home() {
@@ -664,13 +630,35 @@ export default function Home() {
         setShowAnalysisOverlay(true);
         
         try {
-            // Reset states
+            // Reset all states
             setAnalysis([]);
             setSummary('');
             setPrologue('');
             setConstructiveCriticism('');
             setDownloadLink(null);
             setProcessingLogs([]);
+            setCharacterMap({});
+            setMainCharacters([]);
+            setPlotTimeline([]);
+            setWorldBuildingElements({
+                locations: {},
+                customs: [],
+                history: [],
+                rules: [],
+                technology: [],
+                socialStructure: []
+            });
+            setResults({
+                percentage: 0,
+                totalScore: 0,
+                maxPossibleScore: 5,
+                strengths: [],
+                improvements: [],
+                narrativeContext: {
+                    plotArcs: [],
+                    themes: []
+                }
+            });
             
             // Process all files concurrently
             const uploadPromises = files.map(async (fileStatus, index) => {
@@ -692,7 +680,10 @@ export default function Home() {
                             'x-process-mode': 'complete-pdf',
                             'x-analysis-depth': 'comprehensive',
                             'x-character-tracking': 'enabled',
-                            'x-context-analysis': 'deep'
+                            'x-context-analysis': 'deep',
+                            'x-world-building': 'enabled',
+                            'x-plot-analysis': 'enabled',
+                            'x-theme-analysis': 'enabled'
                         }
                     });
 
@@ -712,7 +703,10 @@ export default function Home() {
                             `Analysis started for ${fileStatus.file.name}`,
                             'Analyzing content structure...',
                             'Processing character relationships...',
-                            'Evaluating narrative elements...'
+                            'Evaluating narrative elements...',
+                            'Analyzing world-building elements...',
+                            'Examining plot structure...',
+                            'Identifying themes and motifs...'
                         ]);
                         
                         // Start polling for job status
@@ -768,21 +762,9 @@ export default function Home() {
                 setAnalysisStage(data.stage);
             }
             
-            // Update file status
-            const updatedFiles = [...files];
-            updatedFiles[fileIndex] = {
-                ...updatedFiles[fileIndex],
-                progress: data.progress || 0,
-                status: data.status
-            };
-            setFiles(updatedFiles);
-            
-            if (data.log) {
-                setProcessingLogs(prevLogs => [...prevLogs, data.log]);
-            }
-            
+            // Update file status and analysis data
             if (data.status === 'completed' && data.analysis) {
-                // Update file with analysis data
+                const updatedFiles = [...files];
                 updatedFiles[fileIndex] = {
                     ...updatedFiles[fileIndex],
                     status: 'success',
@@ -791,52 +773,59 @@ export default function Home() {
                 };
                 setFiles(updatedFiles);
                 
-                // Update analysis states
-                setAnalysis(data.analysis);
-                setSummary(data.summary || '');
-                setPrologue(data.prologue || '');
-                setConstructiveCriticism(data.constructiveCriticism || '');
+                // Update analysis states with the complete data
+                setAnalysis(data.analysis.parameters || []);
+                setSummary(data.analysis.summary || '');
+                setPrologue(data.analysis.prologue || '');
+                setConstructiveCriticism(data.analysis.editorial || '');
                 
-                // Update character analysis if present
-                if (data.characterAnalysis) {
-                    setCharacterMap(prevMap => ({
-                        ...prevMap,
-                        ...data.characterAnalysis
-                    }));
-                    setMainCharacters(Object.keys(data.characterAnalysis));
+                // Update character network
+                if (data.analysis.characters) {
+                    setCharacterMap(data.analysis.characters.characterMap || {});
+                    setMainCharacters(data.analysis.characters.mainCharacters || []);
                 }
                 
-                // Update plot timeline if present
-                if (data.plotTimeline) {
-                    setPlotTimeline(prevTimeline => [...prevTimeline, ...(data.plotTimeline as any[])]);
+                // Update plot timeline
+                if (data.analysis.timeline) {
+                    setPlotTimeline(data.analysis.timeline || []);
                 }
                 
-                // Update world building elements if present
-                if (data.worldBuilding) {
-                    setWorldBuildingElements(prevElements => {
-                        const newElements = { ...prevElements };
-                        Object.entries(data.worldBuilding as Record<string, string[]>).forEach(([key, value]) => {
-                            newElements[key] = Array.from(new Set([...(newElements[key] || []), ...value]));
-                        });
-                        return newElements;
+                // Update world building elements
+                if (data.analysis.worldBuilding) {
+                    setWorldBuildingElements({
+                        locations: data.analysis.worldBuilding.locations || {},
+                        customs: data.analysis.worldBuilding.customs || [],
+                        history: data.analysis.worldBuilding.history || [],
+                        rules: data.analysis.worldBuilding.rules || [],
+                        technology: data.analysis.worldBuilding.technology || [],
+                        socialStructure: data.analysis.worldBuilding.socialStructure || []
                     });
                 }
                 
-                // Create downloadable CSV if present
-                if (data.csvContent) {
-                    const blob = new Blob([data.csvContent], { type: 'text/csv' });
-                    setDownloadLink(URL.createObjectURL(blob));
+                // Calculate overall score
+                if (Array.isArray(data.analysis.parameters)) {
+                    const scores = data.analysis.parameters.map(item => 
+                        item.Score > 5 ? item.Score / 2 : item.Score
+                    );
+                    const totalScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+                    setResults({
+                        ...results,
+                        totalScore: Math.round(totalScore * 10) / 10,
+                        maxPossibleScore: 5,
+                        percentage: (totalScore / 5) * 100,
+                        strengths: data.analysis.strengths || [],
+                        improvements: data.analysis.improvements || [],
+                        narrativeContext: {
+                            plotArcs: data.analysis.plotArcs || [],
+                            themes: data.analysis.themes || []
+                        }
+                    });
                 }
                 
                 setProcessingLogs(prevLogs => [...prevLogs, 'Analysis completed successfully!']);
                 setShowLoader(false);
                 setShowAnalysisOverlay(false);
                 messageApi.success('Analysis completed successfully!');
-                return;
-            }
-            
-            if (data.status === 'error') {
-                handleAnalysisError(data.error || 'Unknown error', fileIndex);
                 return;
             }
             
@@ -989,6 +978,7 @@ export default function Home() {
                 sections: [{
                     properties: {},
                     children: [
+                        // Title Page
                         new DocxParagraph({
                             children: [
                                 new TextRun({
@@ -996,9 +986,168 @@ export default function Home() {
                                     bold: true,
                                     size: 32
                                 })
-                            ]
+                            ],
+                            spacing: {
+                                after: 400
+                            }
                         }),
-                        // Add more content here
+                        
+                        // Summary Section
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Book Summary",
+                                    bold: true,
+                                    size: 28,
+                                    color: '1890FF'
+                                })
+                            ],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: summary || "No summary available",
+                                    size: 24
+                                })
+                            ],
+                            spacing: { after: 200 }
+                        }),
+                        
+                        // Prologue Analysis
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Prologue Analysis",
+                                    bold: true,
+                                    size: 28,
+                                    color: '722ED1'
+                                })
+                            ],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: prologue || "No prologue analysis available",
+                                    size: 24
+                                })
+                            ],
+                            spacing: { after: 200 }
+                        }),
+                        
+                        // Overall Score
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Overall Assessment",
+                                    bold: true,
+                                    size: 28
+                                })
+                            ],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: `Overall Score: ${results.totalScore}/5`,
+                                    size: 24,
+                                    bold: true
+                                })
+                            ],
+                            spacing: { after: 200 }
+                        }),
+                        
+                        // Strengths
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Key Strengths",
+                                    bold: true,
+                                    size: 24
+                                })
+                            ],
+                            spacing: { before: 200, after: 100 }
+                        }),
+                        ...results.strengths.map(strength => 
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: `• ${strength}`,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { after: 100 }
+                            })
+                        ),
+                        
+                        // Areas for Improvement
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Areas for Improvement",
+                                    bold: true,
+                                    size: 24
+                                })
+                            ],
+                            spacing: { before: 200, after: 100 }
+                        }),
+                        ...results.improvements.map(item => 
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: `• ${item.area} (Score: ${item.score}/5): ${item.justification}`,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { after: 100 }
+                            })
+                        ),
+                        
+                        // Detailed Analysis
+                        new DocxParagraph({
+                            children: [
+                                new TextRun({
+                                    text: "Detailed Analysis",
+                                    bold: true,
+                                    size: 28
+                                })
+                            ],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        ...analysis.map(item => [
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: item.Parameter,
+                                        bold: true,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { before: 200, after: 100 }
+                            }),
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: `Score: ${item.Score > 5 ? (item.Score / 2).toFixed(1) : item.Score}/5`,
+                                        size: 24,
+                                        color: 
+                                            item.Score >= 4 ? '52C41A' :
+                                            item.Score >= 3 ? 'FAAD14' : 'F5222D'
+                                    })
+                                ],
+                                spacing: { after: 100 }
+                            }),
+                            new DocxParagraph({
+                                children: [
+                                    new TextRun({
+                                        text: item.Justification,
+                                        size: 24
+                                    })
+                                ],
+                                spacing: { after: 200 }
+                            })
+                        ]).flat()
                     ]
                 }]
             });
@@ -1230,37 +1379,39 @@ export default function Home() {
             
             // Add analysis content
             if (file.analysis) {
-                // Add summary section
-                pdf.addPage();
+                let yPos = 160;
+                
+                // Add prompt-wise analysis
                 pdf.setFontSize(16);
-                pdf.text('Analysis Summary', 40, 40);
-                pdf.setFontSize(12);
-                
-                let yPos = 80;
-                
-                // Add overall score
-                pdf.text(`Overall Score: ${file.analysis.totalScore}/5`, 40, yPos);
+                pdf.text('Prompt-wise Analysis', 40, yPos);
                 yPos += 30;
                 
-                // Add strengths
-                pdf.text('Key Strengths:', 40, yPos);
-                yPos += 20;
-                file.analysis.strengths?.forEach(strength => {
-                    pdf.text(`• ${strength}`, 60, yPos);
+                file.analysis.forEach((item: any) => {
+                    if (yPos > 750) {
+                        pdf.addPage();
+                        yPos = 40;
+                    }
+                    
+                    pdf.setFontSize(14);
+                    pdf.text(item.Parameter, 40, yPos);
                     yPos += 20;
-                });
-                
-                // Add improvements
-                yPos += 20;
-                pdf.text('Areas for Improvement:', 40, yPos);
-                yPos += 20;
-                file.analysis.improvements?.forEach(item => {
-                    const text = `• ${item.area}: ${item.justification}`;
-                    const lines = pdf.splitTextToSize(text, pageWidth - 80);
-                    lines.forEach(line => {
-                        pdf.text(line, 60, yPos);
+                    
+                    pdf.setFontSize(12);
+                    const score = item.Score > 5 ? (item.Score / 2).toFixed(1) : item.Score;
+                    pdf.text(`Score: ${score}/5`, 40, yPos);
+                    yPos += 20;
+                    
+                    const justificationLines = pdf.splitTextToSize(item.Justification, pageWidth - 80);
+                    justificationLines.forEach((line: string) => {
+                        if (yPos > 750) {
+                            pdf.addPage();
+                            yPos = 40;
+                        }
+                        pdf.text(line, 40, yPos);
                         yPos += 20;
                     });
+                    
+                    yPos += 20;
                 });
             }
             
@@ -1268,6 +1419,7 @@ export default function Home() {
             pdf.save(`${file.file.name}-analysis.pdf`);
             setPdfSuccess(true);
             setTimeout(() => setPdfSuccess(false), 3000);
+            
         } catch (error) {
             console.error('Error generating individual PDF:', error);
             message.error('Failed to generate PDF report');
