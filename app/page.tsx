@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Layout, Upload, Button, Table, Spin, Alert, Card, Row, Col, Typography, Divider, Progress, message, Modal, ConfigProvider, theme, Space, Select } from "antd";
-import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined, UserOutlined, FieldTimeOutlined, GlobalOutlined, DeleteOutlined, SwapOutlined } from "@ant-design/icons";
+import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined, UserOutlined, FieldTimeOutlined, GlobalOutlined, DeleteOutlined, SwapOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import domtoimage from 'dom-to-image';
 import jsPDF from 'jspdf';
 import './styles.css';
@@ -167,6 +167,10 @@ const AnalysisReport = ({ data, fileName }) => (
     </Document>
 );
 
+// Near the top of file where environment variables are accessed
+const VERCEL_URL = process.env.NEXT_PUBLIC_VERCEL_URL || '';
+const isProduction = process.env.NODE_ENV === 'production';
+
 export default function Home() {
     // File handling states
     const [files, setFiles] = useState<FileUploadStatus[]>([]);
@@ -186,11 +190,14 @@ export default function Home() {
     const [processingLogs, setProcessingLogs] = useState<string[]>([]);
     
     // Progress states
-    const [analysisStage, setAnalysisStage] = useState('');
     const [progress, setProgress] = useState(0);
+    const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number>(15 * 60); // Track seconds instead of minutes
+    const [visualCountdown, setVisualCountdown] = useState<number>(15 * 60); // UI-only countdown
+    const [analysisStage, setAnalysisStage] = useState("Preparing");
     const [capturingPdf, setCapturingPdf] = useState(false);
     const [pdfSuccess, setPdfSuccess] = useState(false);
     const resultCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Analysis result states
     const [results, setResults] = useState<AnalysisResults>({
@@ -692,6 +699,18 @@ export default function Home() {
                 flex: 1 1 100%;
             }
         }
+
+        /* Add these to your animationStyles string */
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
+        }
+        
+        .brain {
+            font-size: 60px;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite, pulse 2s ease-in-out infinite;
+        }
     `;
     
     // Refs for capturing PDF content
@@ -732,144 +751,13 @@ export default function Home() {
         if (vercelDeployment && showAnalysisOverlay) {
             interval = setInterval(() => {
                 setLoadingMessageIndex(prev => (prev + 1) % funnyLoadingMessages.length);
-            }, 4000);
+            }, 2500); // Change from 4000 to 2500
         }
         
         return () => {
             if (interval) clearInterval(interval);
         };
     }, [vercelDeployment, showAnalysisOverlay, funnyLoadingMessages.length]);
-    
-    // Enhanced polling logic for job status that's more resilient to errors
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-        let errorCount = 0;
-        const MAX_ERRORS = 3;
-        
-        if (jobId && loading) {
-            interval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/api/analyze?jobId=${jobId}`);
-                    
-                    // Handle 400 Bad Request (likely means job data is gone in serverless environment)
-                    if (response.status === 400) {
-                        errorCount++;
-                        console.log(`Job status check error (${errorCount}/${MAX_ERRORS}): Job ID not found`);
-                        
-                        // After multiple failed attempts, assume job is processing in background
-                        // and show a more graceful error message
-                        if (errorCount >= MAX_ERRORS) {
-                            clearInterval(interval);
-                            setLoading(false);
-                            setProgress(100);
-                            setAnalysisStage("Processing in background");
-                            setProcessingLogs(prev => [
-                                ...prev, 
-                                "Your file is being processed in the background. This may take a few minutes.",
-                                "The results will appear here when ready. You can refresh the page later to check."
-                            ]);
-                            setShowAnalysisOverlay(false);
-                            setVercelDeployment(true);
-                            
-                            // Show fallback message to user
-                            message.info(
-                                "Your document is being processed in the background. This typically takes 1-3 minutes. " +
-                                "The page will update automatically when completed.", 
-                                10
-                            );
-                            
-                            // Implement simpler status check that doesn't rely on in-memory job state
-                            startSimpleProgressCheck();
-                        }
-                        return;
-                    }
-                    
-                    if (!response.ok) {
-                        throw new Error(`Status check failed: ${response.status}`);
-                    }
-                    
-                    // Reset error count on successful response
-                    errorCount = 0;
-                    
-                    const data = await response.json();
-                    console.log("Job status:", data);
-                    
-                    // Update UI based on status
-                    if (data.progress !== undefined) {
-                        setProgress(data.progress);
-                    }
-                    
-                    if (data.message) {
-                        setAnalysisStage(data.message);
-                        setProcessingLogs(prev => [...prev, data.message]);
-                    }
-                    
-                    // Add more detailed progress information if available
-                    if (data.currentChunk && data.chunksToProcess) {
-                        const chunkInfo = `Processing chunk ${data.currentChunk} of ${data.chunksToProcess}`;
-                        if (!processingLogs.includes(chunkInfo)) {
-                            setProcessingLogs(prev => [...prev, chunkInfo]);
-                        }
-                    }
-                    
-                    // Check if processing is complete
-                    if (data.status === 'completed' && data.completed) {
-                        clearInterval(interval);
-                        setLoading(false);
-                        setProgress(100);
-                        setAnalysisStage("Analysis complete!");
-                        setProcessingLogs(prev => [...prev, "Analysis successfully completed!"]);
-                        setShowAnalysisOverlay(false);
-                        
-                        // Update UI with results
-                        if (data.analysis) {
-                            setAnalysis(data.analysis);
-                            setSummary(data.summary || "");
-                            setPrologue(data.prologue || "");
-                            setConstructiveCriticism(data.constructiveCriticism || "");
-                            
-                            // Create a downloadable CSV link if csvContent exists
-                            if (data.csvContent) {
-                                const csvBlob = new Blob([data.csvContent], { type: 'text/csv' });
-                                const csvUrl = URL.createObjectURL(csvBlob);
-                                setDownloadLink(csvUrl);
-                            }
-                        }
-                    }
-                    
-                    // Handle error state
-                    if (data.status === 'error') {
-                        clearInterval(interval);
-                        setLoading(false);
-                        setProgress(100);
-                        setAnalysisStage("Analysis failed!");
-                        setProcessingLogs(prev => [...prev, `Error: ${data.error || "Unknown error"}`]);
-                        alert(`Analysis failed! ${data.error || "Unknown error"}`);
-                        setShowAnalysisOverlay(false);
-                    }
-                    
-                } catch (error) {
-                    console.error("Error checking job status:", error);
-                    errorCount++;
-                    
-                    // Log the error but don't spam the user
-                    if (errorCount <= 2) {
-                        setProcessingLogs(prev => [...prev, `Error checking status: ${error}`]);
-                    }
-                    
-                    // After multiple failures, switch to simpler approach
-                    if (errorCount >= MAX_ERRORS) {
-                        clearInterval(interval);
-                        startSimpleProgressCheck();
-                    }
-                }
-            }, 2000);
-        }
-        
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [jobId, loading]);
     
     // Check URL parameters for serverless mode request
     useEffect(() => {
@@ -901,88 +789,6 @@ export default function Home() {
         window.location.href = currentUrl.toString();
     };
 
-    // Add check for final result button to serverless display
-    const checkForResults = () => {
-        message.loading("Checking for results...", 3);
-        checkFinalResult(false);
-    };
-    
-    // Improved serverless progress checker
-    const startSimpleProgressCheck = () => {
-        // Use artificial progress as fallback
-        let artificialProgress = 10;
-        let checkCounter = 0;
-        
-        // Clear any existing interval
-        if (resultCheckIntervalRef.current) {
-            clearInterval(resultCheckIntervalRef.current);
-        }
-        
-        // Use a much slower polling interval (60 seconds instead of 12)
-        const autoCheckInterval = setInterval(() => {
-            checkCounter++;
-            
-            // Skip network requests entirely most of the time
-            // Only check the server every 3rd interval to reduce load
-            if (checkCounter % 3 === 0) {
-                fetch(`/api/analyze?finalResult=true&jobId=${jobId}`, {
-                    // Add timeout to prevent hanging requests
-                    signal: AbortSignal.timeout(10000) // 10 second timeout
-                })
-                .then(response => {
-                    if (response.ok) return response.json();
-                    throw new Error("Not ready yet");
-                })
-                .then(data => {
-                    if (data.analysis) {
-                        // Success! We have the final data
-                        clearInterval(autoCheckInterval);
-                        setLoading(false);
-                        setProgress(100);
-                        setAnalysisStage("Analysis complete!");
-                        setShowAnalysisOverlay(false);
-                        resultCheckIntervalRef.current = null;
-                        
-                        // Update UI with results
-                        setAnalysis(data.analysis);
-                        setSummary(data.summary || "");
-                        setPrologue(data.prologue || "");
-                        setConstructiveCriticism(data.constructiveCriticism || "");
-                        
-                        // Notify user of completion
-                        message.success("Analysis completed successfully!", 5);
-                    } else {
-                        // Still processing, increase progress gradually
-                        // Calculate progress in a way that never quite reaches 100%
-                        artificialProgress = Math.min(artificialProgress + (4 - (0.1 * checkCounter)), 95);
-                        setProgress(artificialProgress);
-                        
-                        // Update UI with more specific messages based on progress
-                        updateProgressStage(artificialProgress);
-                    }
-                })
-                .catch(error => {
-                    console.log("Periodic check failed, continuing with estimate");
-                    // Still update progress even on failure
-                    artificialProgress = Math.min(artificialProgress + 1, 90);
-                    setProgress(artificialProgress);
-                    updateProgressStage(artificialProgress);
-                });
-            } else {
-                // Just update progress without network request
-                artificialProgress = Math.min(artificialProgress + 2, 90);
-                setProgress(artificialProgress);
-                updateProgressStage(artificialProgress);
-            }
-        }, 60000); // 60 seconds instead of 12 seconds
-        
-        // Store interval ref so we can clear it when needed
-        resultCheckIntervalRef.current = autoCheckInterval;
-        
-        // Update UI with initial progress stage
-        updateProgressStage(artificialProgress);
-    };
-    
     // Helper function to update progress stage based on progress percentage
     const updateProgressStage = (progress: number) => {
         if (progress < 20) {
@@ -1000,16 +806,29 @@ export default function Home() {
         }
     };
     
-    // Check for final result directly instead of relying on status updates
+    // Add check for final result button to serverless display
+    const checkForResults = () => {
+        message.loading("Checking for results...", 3);
+        checkFinalResult(false);
+    };
+    
+    // Check for final result directly when user clicks the button
     const checkFinalResult = async (showError: boolean = true) => {
+        if (!jobId) {
+            message.info("No analysis in progress", 3);
+            return;
+        }
+        
         try {
-            // Try to get the final result directly using a special endpoint/param
+            message.loading("Checking for results...", 3);
+            
             const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`);
             
             if (response.ok) {
                 const data = await response.json();
                 
                 if (data.analysis) {
+                    // Success! We have the final data
                     setLoading(false);
                     setProgress(100);
                     setAnalysisStage("Analysis complete!");
@@ -1021,36 +840,158 @@ export default function Home() {
                     setPrologue(data.prologue || "");
                     setConstructiveCriticism(data.constructiveCriticism || "");
                     
-                    // Create a downloadable CSV link if csvContent exists
-                    if (data.csvContent) {
-                        const csvBlob = new Blob([data.csvContent], { type: 'text/csv' });
-                        const csvUrl = URL.createObjectURL(csvBlob);
-                        setDownloadLink(csvUrl);
-                    }
+                    message.success("Analysis completed successfully!", 5);
                 } else {
-                    // Still processing, show appropriate message
-                    setProgress(95);
-                    setAnalysisStage("Almost done...");
-                    
-                    // Try one more time after 15 more seconds
-                    setTimeout(() => {
-                        setLoading(false);
-                        setShowAnalysisOverlay(false);
-                        message.info("Your document analysis is still processing. Please refresh the page in a minute to see the results.");
-                    }, 15000);
+                    message.info("Your document is still being analyzed. Please try again in a minute.");
                 }
             } else {
-                // Handle failure
-                setLoading(false);
-                setShowAnalysisOverlay(false);
-                message.error("We couldn't complete the analysis. Please try again with a smaller document.");
+                if (showError) {
+                    message.error("Could not check analysis status. Please try again later.");
+                }
             }
         } catch (error) {
             console.error("Error checking final result:", error);
-            setLoading(false);
-            setShowAnalysisOverlay(false);
-            message.error("Analysis couldn't be completed. Please try again.");
+            if (showError) {
+                message.error("Failed to check analysis status. Please try again.");
+            }
         }
+    };
+    
+    // Improved serverless progress checker with much less API load
+    const startSimpleProgressCheck = () => {
+        // Only start if we have a job ID
+        if (!jobId) {
+            console.log("Cannot start progress check without a job ID");
+            return;
+        }
+        
+        // Use artificial progress as fallback
+        let artificialProgress = 10;
+        let checkCounter = 0;
+        let maxRetries = 20; // Limit the number of retries to avoid infinite polling
+        
+        // Clear any existing intervals
+        if (resultCheckIntervalRef.current) {
+            clearInterval(resultCheckIntervalRef.current);
+            resultCheckIntervalRef.current = null;
+        }
+        
+        if (timeUpdateIntervalRef.current) {
+            clearInterval(timeUpdateIntervalRef.current);
+            timeUpdateIntervalRef.current = null;
+        }
+        
+        console.log(`Starting silent progress check for job ${jobId} - will check every 3 minutes`);
+        
+        // Only log the first status message to avoid flooding the console
+        console.log("Serverless mode active - using estimated progress");
+        
+        // Try to get results silently without showing UI errors
+        const silentCheck = async () => {
+            if (!jobId) return null;
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                
+                const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`, {
+                    signal: controller.signal
+                }).catch(error => {
+                    console.log("Silent check failed:", error.message || "Network error");
+                    return null;
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response || !response.ok) return null;
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.log("Silent check exception:", error);
+                return null;
+            }
+        };
+        
+        // First check immediately
+        silentCheck().then(data => {
+            // ... existing then logic ...
+        });
+        
+        // Set up time update interval first
+        const timeUpdateInterval = setInterval(() => {
+            setEstimatedTimeRemaining(prev => {
+                // Convert to seconds - decrease by 20 seconds every interval
+                const newValue = Math.max(1, prev - 20);
+                console.log(`Time remaining updated: ${formatTimeRemaining(prev)} -> ${formatTimeRemaining(newValue)}`);
+                return newValue;
+            });
+        }, 20000); // Update every 20 seconds
+        
+        // Store the time interval ref so we can clear it later
+        timeUpdateIntervalRef.current = timeUpdateInterval;
+        
+        // Set up progress check interval
+        const progressInterval = setInterval(async () => {
+            checkCounter++;
+            
+            // Check server every 2nd interval or if we're at a critical point 
+            // This means checking every 3 minutes (with 90 sec interval)
+            if (checkCounter % 2 === 0 || artificialProgress > 80) {
+                silentCheck().then(data => {
+                    if (data?.analysis) {
+                        // Success! Got results
+                        clearInterval(progressInterval);
+                        if (timeUpdateIntervalRef.current) {
+                            clearInterval(timeUpdateIntervalRef.current);
+                            timeUpdateIntervalRef.current = null;
+                        }
+                        resultCheckIntervalRef.current = null;
+                        
+                        setLoading(false);
+                        setProgress(100);
+                        setAnalysisStage("Analysis complete!");
+                        setShowAnalysisOverlay(false);
+                        
+                        // Update UI with results
+                        setAnalysis(data.analysis);
+                        setSummary(data.summary || "");
+                        setPrologue(data.prologue || "");
+                        setConstructiveCriticism(data.constructiveCriticism || "");
+                        message.success("Analysis completed successfully!", 5);
+                    } else {
+                        // Still processing, increase progress gradually
+                        artificialProgress = Math.min(artificialProgress + (4 - (0.1 * checkCounter)), 95);
+                        setProgress(artificialProgress);
+                        updateProgressStage(artificialProgress);
+                    }
+                });
+            } else {
+                // Just update progress without API request
+                artificialProgress = Math.min(artificialProgress + 3, 90);
+                setProgress(artificialProgress);
+                updateProgressStage(artificialProgress);
+            }
+            
+            // After max retries, stop checking automatically
+            if (checkCounter >= maxRetries) {
+                console.log(`Reached maximum polling attempts (${maxRetries}). Stopping automatic checks.`);
+                clearInterval(progressInterval);
+                if (timeUpdateIntervalRef.current) {
+                    clearInterval(timeUpdateIntervalRef.current);
+                    timeUpdateIntervalRef.current = null;
+                }
+                resultCheckIntervalRef.current = null;
+                
+                // Set progress to 95% and show message to use manual check
+                setProgress(95);
+                setAnalysisStage("Almost done! Check for results manually.");
+                message.info("Analysis is taking longer than expected. Use the 'Check for Results' button to check manually.", 10);
+            }
+        }, 90000); // 90 seconds (1.5 minutes)
+        
+        // Store the progress interval ref
+        resultCheckIntervalRef.current = progressInterval;
     };
 
     // Replace handleFileChange with this new version
@@ -1073,7 +1014,17 @@ export default function Home() {
 
         if (newFiles) {
             setFiles(prev => {
-                const combined = [...prev, ...newFiles];
+                // Check for duplicates by file name to prevent the same file being added multiple times
+                const existingFileNames = new Set(prev.map(f => f.file.name));
+                const uniqueNewFiles = newFiles.filter(newFile => !existingFileNames.has(newFile.file.name));
+                
+                // If all new files are duplicates, show a message
+                if (uniqueNewFiles.length === 0 && newFiles.length > 0) {
+                    message.info("These files are already in the queue");
+                    return prev;
+                }
+                
+                const combined = [...prev, ...uniqueNewFiles];
                 // Keep only the last 10 files if more are added
                 return combined.slice(-10);
             });
@@ -1177,8 +1128,15 @@ export default function Home() {
                             'Results will appear when processing is complete.'
                         ]);
                         
-                        // Start serverless progress check immediately
-                        startSimpleProgressCheck();
+                        // Add these lines to ensure jobId is properly set before checking progress:
+                        setTimeout(() => {
+                            if (data.jobId) {
+                                startSimpleProgressCheck();
+                            } else {
+                                console.error("JobId still not available after upload");
+                                setProgress(10); // Set some initial progress to show activity
+                            }
+                        }, 500);
                     } else {
                         throw new Error('No job ID received from server');
                     }
@@ -2491,6 +2449,96 @@ export default function Home() {
         }
     }, [jobId]);
 
+    // In the useEffect where you initialize the app
+    useEffect(() => {
+      // Auto-detect Vercel environment
+      if (typeof window !== 'undefined') {
+        // Check if running on Vercel
+        const isVercel = window.location.hostname.includes('vercel.app') || 
+                         VERCEL_URL.length > 0 ||
+                         isProduction;
+                         
+        if (isVercel && !vercelDeployment) {
+          console.log("Vercel deployment detected, activating serverless mode");
+          setVercelDeployment(true);
+        }
+      }
+    }, []);
+
+    // Add a helper function to format time as HH:MM:SS
+    const formatTimeRemaining = (totalSeconds: number): string => {
+      if (totalSeconds <= 0) return "00:00";
+      
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      
+      if (hours > 0) {
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+    };
+
+    // Update the useEffect for time updates to decrease in seconds instead of minutes
+    useEffect(() => {
+      // Reset and initialize estimated time when analysis starts
+      if (showAnalysisOverlay && vercelDeployment) {
+        // Set initial time estimate based on typical processing time
+        console.log("Resetting time estimate to 15 minutes");
+        setEstimatedTimeRemaining(15 * 60); // 15 minutes in seconds
+        
+        // Clear any existing time update interval
+        if (timeUpdateIntervalRef.current) {
+          clearInterval(timeUpdateIntervalRef.current);
+          timeUpdateIntervalRef.current = null;
+        }
+        
+        // Start a new time update interval that updates more frequently
+        const fastTimeUpdate = setInterval(() => {
+          setEstimatedTimeRemaining(prev => {
+            const newValue = Math.max(1, prev - 1); // Decrease by 1 second
+            return newValue;
+          });
+        }, 1000); // Update every second for a real ticking clock
+        
+        timeUpdateIntervalRef.current = fastTimeUpdate;
+        
+        // Clean up on unmount or when overlay closes
+        return () => {
+          if (timeUpdateIntervalRef.current) {
+            clearInterval(timeUpdateIntervalRef.current);
+            timeUpdateIntervalRef.current = null;
+          }
+        };
+      }
+    }, [showAnalysisOverlay, vercelDeployment]);
+
+    // Add a useEffect for the visual countdown timer
+    useEffect(() => {
+      // Only run the visual countdown when analysis overlay is showing
+      if (!showAnalysisOverlay) return;
+      
+      console.log("Starting visual countdown timer");
+      
+      // Start at full time when analysis begins
+      setVisualCountdown(15 * 60);
+      
+      // Create a timer that ticks every second
+      const visualTimer = setInterval(() => {
+        setVisualCountdown(prev => {
+          // Don't go below zero
+          if (prev <= 0) return 0;
+          return prev - 1;
+        });
+      }, 1000);
+      
+      // Clean up when analysis completes or component unmounts
+      return () => {
+        clearInterval(visualTimer);
+      };
+    }, [showAnalysisOverlay]);
+
     return (
         <AntApp>
             {contextHolder}
@@ -2613,7 +2661,7 @@ export default function Home() {
                                         <div style={{ marginTop: '20px' }}>
                                             {files.map((file, index) => (
                                                 <div
-                                                    key={index}
+                                                    key={`${file.file.name}-${index}`}
                                                     style={{
                                                         display: 'flex',
                                                         alignItems: 'center',
@@ -3947,6 +3995,24 @@ export default function Home() {
             {showAnalysisOverlay && (
                 <div className="analyzerOverlay">
                     <style>{animationStyles}</style>
+                    
+                    {/* Add emergency restart button at the top of the overlay */}
+                    {!vercelDeployment && progress > 10 && progress < 95 && (
+                        <Button 
+                            type="primary" 
+                            danger 
+                            onClick={restartInEmergencyMode}
+                            style={{
+                                position: 'absolute',
+                                top: '20px',
+                                right: '20px',
+                                zIndex: 1010
+                            }}
+                        >
+                            Restart in Emergency Mode
+                        </Button>
+                    )}
+                    
                     <div style={{ maxWidth: '600px', textAlign: 'center' }}>
                         <div className="loader-container">
                             {progress < 100 ? (
@@ -3958,6 +4024,16 @@ export default function Home() {
                                             <div className="dot"></div>
                                             <div className="dot"></div>
                                             <div className="dot"></div>
+                                        </div>
+                                        {/* Add this activity ticker */}
+                                        <div className="activity-ticker" style={{ 
+                                          fontSize: '11px', 
+                                          color: '#666',
+                                          marginTop: '15px',
+                                          height: '16px',
+                                          overflow: 'hidden'
+                                        }}>
+                                          {['Reading text...', 'Processing chapters...', 'Analyzing characters...', 'Evaluating plot...', 'Finding themes...'][Math.floor(Date.now()/1000) % 5]}
                                         </div>
                                     </div>
                                 ) : (
@@ -3998,70 +4074,95 @@ export default function Home() {
                                         ></div>
                                     </div>
                                     
-                                    <div className="statusInfo" style={{ marginBottom: '15px' }}>
-                                        <span>{analysisStage}</span>
+                                    <div className="progress-status">
+                                      <span>{analysisStage}</span>
+                                      {/* Add time remaining display with progress */}
+                                      <div style={{ 
+                                        fontSize: "14px", 
+                                        color: "#666", 
+                                        marginTop: "8px",
+                                        textAlign: "center" 
+                                      }}>
                                         <div style={{ 
-                                            fontSize: '14px', 
-                                            opacity: 0.8, 
-                                            marginTop: '5px',
-                                            color: progress === 100 ? '#52c41a' : '#1890ff'
+                                          display: "flex", 
+                                          flexDirection: "column",
+                                          alignItems: "center", 
+                                          justifyContent: "center",
+                                          gap: "5px" 
                                         }}>
-                                            {progress}% Complete (Estimate)
+                                          {/* Progress percentage above clock */}
+                                          <div style={{
+                                            fontSize: "16px",
+                                            fontWeight: "bold",
+                                            color: "#1890ff",
+                                            marginBottom: "2px"
+                                          }}>
+                                            {progress.toFixed(0)}% Complete
+                                          </div>
+                                          
+                                          {/* Circular clock UI */}
+                                          {visualCountdown > 0 ? (
+                                            <div style={{ position: "relative", width: "80px", height: "80px", margin: "0 auto" }}>
+                                              {/* Background circle */}
+                                              <svg width="80" height="80" viewBox="0 0 100 100">
+                                                <circle 
+                                                  cx="50" 
+                                                  cy="50" 
+                                                  r="45" 
+                                                  fill="none" 
+                                                  stroke="#f0f0f0" 
+                                                  strokeWidth="8" 
+                                                />
+                                                {/* Countdown progress ring */}
+                                                <circle 
+                                                  cx="50" 
+                                                  cy="50" 
+                                                  r="45" 
+                                                  fill="none" 
+                                                  stroke="#1890ff" 
+                                                  strokeWidth="8" 
+                                                  strokeLinecap="round"
+                                                  strokeDasharray="283"
+                                                  strokeDashoffset={283 * (1 - visualCountdown / (15 * 60))}
+                                                  transform="rotate(-90 50 50)"
+                                                  style={{
+                                                    transition: "stroke-dashoffset 1s linear, stroke 0.5s ease",
+                                                    stroke: visualCountdown < 60 ? "#f5222d" : 
+                                                           visualCountdown < 3 * 60 ? "#faad14" : "#1890ff"
+                                                  }}
+                                                />
+                                              </svg>
+                                              {/* Clock hands */}
+                                              <div style={{ 
+                                                position: "absolute", 
+                                                top: 0, 
+                                                left: 0, 
+                                                width: "100%", 
+                                                height: "100%", 
+                                                display: "flex", 
+                                                alignItems: "center", 
+                                                justifyContent: "center", 
+                                                flexDirection: "column" 
+                                              }}>
+                                                <span style={{ 
+                                                  fontSize: "18px", 
+                                                  fontWeight: "bold", 
+                                                  fontFamily: "monospace",
+                                                  color: visualCountdown < 60 ? "#f5222d" : 
+                                                        visualCountdown < 3 * 60 ? "#faad14" : "#1890ff"
+                                                }}>
+                                                  {formatTimeRemaining(visualCountdown)}
+                                                </span>
+                                                <span style={{ fontSize: "10px", marginTop: "2px" }}>remaining</span>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            'Finalizing results...'
+                                          )}
                                         </div>
+                                      </div>
                                     </div>
                                 
-                                    <div className="funny-loading-messages">
-                                        {funnyLoadingMessages.map((message, index) => (
-                                            <div 
-                                                key={index} 
-                                                className={`loading-message ${index === loadingMessageIndex ? 'active' : ''}`}
-                                            >
-                                                {message}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    
-                                    <div style={{ marginTop: '30px' }}>
-                                        <Button 
-                                            type="primary" 
-                                            onClick={checkForResults} 
-                                            style={{ marginRight: '10px' }}
-                                        >
-                                            Check for Results
-                                        </Button>
-                                        
-                                        <Button 
-                                            onClick={() => {
-                                                window.location.reload();
-                                            }}
-                                        >
-                                            Restart Analysis
-                                        </Button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="progressBar">
-                                        <div 
-                                            className="progressFill" 
-                                            style={{
-                                                width: `${progress}%`,
-                                                backgroundColor: progress === 100 ? '#52c41a' : '#1890ff'
-                                            }}
-                                        ></div>
-                                    </div>
-                                    
-                                    <div className="statusInfo">
-                                        <span>{analysisStage}</span>
-                                        <div style={{ 
-                                            fontSize: '14px', 
-                                            opacity: 0.8, 
-                                            marginTop: '5px',
-                                            color: progress === 100 ? '#52c41a' : '#1890ff'
-                                        }}>
-                                            {progress}% Complete
-                                        </div>
-                                    </div>
 
                                     {/* Add emergency restart button */}
                                     {progress > 20 && progress < 95 && (
@@ -4074,7 +4175,11 @@ export default function Home() {
                                             Restart in Emergency Mode
                                         </Button>
                                     )}
-                                </>
+                                </div>
+                            ) : (
+                                <div>
+                                    {/* Non-vercelDeployment content goes here */}
+                                </div>
                             )}
                             
                             <div style={{
