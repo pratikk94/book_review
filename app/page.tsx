@@ -327,13 +327,14 @@ export default function Home() {
         
         .brain-container {
             position: absolute;
-            top: 50%;
+            top: 40%; /* Move higher */
             left: 50%;
             transform: translate(-50%, -50%);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            width: 200px; /* Fixed width */
         }
         
         .brain {
@@ -917,12 +918,17 @@ export default function Home() {
             clearInterval(resultCheckIntervalRef.current);
         }
         
-        // Set up periodic checks for results with exponential backoff
+        // Use a much slower polling interval (60 seconds instead of 12)
         const autoCheckInterval = setInterval(() => {
             checkCounter++;
             
-            // Try to get final results without showing errors
-            fetch(`/api/analyze?finalResult=true&jobId=${jobId}`)
+            // Skip network requests entirely most of the time
+            // Only check the server every 3rd interval to reduce load
+            if (checkCounter % 3 === 0) {
+                fetch(`/api/analyze?finalResult=true&jobId=${jobId}`, {
+                    // Add timeout to prevent hanging requests
+                    signal: AbortSignal.timeout(10000) // 10 second timeout
+                })
                 .then(response => {
                     if (response.ok) return response.json();
                     throw new Error("Not ready yet");
@@ -956,22 +962,19 @@ export default function Home() {
                     }
                 })
                 .catch(error => {
-                    console.log("Periodic check: still processing...");
-                    // Increase progress more slowly if we're getting errors
+                    console.log("Periodic check failed, continuing with estimate");
+                    // Still update progress even on failure
                     artificialProgress = Math.min(artificialProgress + 1, 90);
                     setProgress(artificialProgress);
-                    
-                    // Update UI with progress message
                     updateProgressStage(artificialProgress);
                 });
-                
-            // Dynamic interval timing - Start frequent and slow down
-            if (checkCounter > 10) {
-                // After 10 checks (~2 minutes), slow down the interval
-                clearInterval(autoCheckInterval);
-                resultCheckIntervalRef.current = setInterval(startSimpleProgressCheck, 30000); // Every 30 seconds
+            } else {
+                // Just update progress without network request
+                artificialProgress = Math.min(artificialProgress + 2, 90);
+                setProgress(artificialProgress);
+                updateProgressStage(artificialProgress);
             }
-        }, 12000); // Every 12 seconds initially
+        }, 60000); // 60 seconds instead of 12 seconds
         
         // Store interval ref so we can clear it when needed
         resultCheckIntervalRef.current = autoCheckInterval;
@@ -3977,7 +3980,12 @@ export default function Home() {
 
                         <div className="processingIndicator">
                             {vercelDeployment ? (
-                                <div className="serverless-processing">
+                                <div className="serverless-processing" style={{ 
+                                    width: '100%', 
+                                    maxWidth: '500px',
+                                    margin: '0 auto',
+                                    padding: '20px'
+                                }}>
                                     {/* Show progress bar in serverless mode too */}
                                     <div className="progressBar" style={{ marginBottom: '15px' }}>
                                         <div 
