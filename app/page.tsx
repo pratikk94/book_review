@@ -921,11 +921,35 @@ export default function Home() {
                     setAnalysisStage("Analysis complete!");
                     setShowAnalysisOverlay(false);
                     
-                    // Update UI with results
-                    setAnalysis(data.analysis);
+                    // Update UI with results - Make sure analysis is properly set as an array
+                    setAnalysis(Array.isArray(data.analysis) ? data.analysis : []);
                     setSummary(data.summary || "");
                     setPrologue(data.prologue || "");
                     setConstructiveCriticism(data.constructiveCriticism || "");
+                    
+                    // Add logging to debug the analysis data
+                    console.log("Analysis data received:", data.analysis);
+                    
+                    // Update character and plot data too
+                    if (data.characters) {
+                        setCharacterMap(data.characters.characterMap || {});
+                        setMainCharacters(data.characters.mainCharacters || []);
+                    }
+                    
+                    if (data.timeline) {
+                        setPlotTimeline(data.timeline || []);
+                    }
+                    
+                    if (data.worldBuilding) {
+                        setWorldBuildingElements({
+                            locations: data.worldBuilding.locations || {},
+                            customs: data.worldBuilding.customs || [],
+                            history: data.worldBuilding.history || [],
+                            rules: data.worldBuilding.rules || [],
+                            technology: data.worldBuilding.technology || [],
+                            socialStructure: data.worldBuilding.socialStructure || []
+                        });
+                    }
                     
                     message.success("Analysis completed successfully!", 5);
                 } else if (data.message && data.message.includes("being analyzed")) {
@@ -1129,10 +1153,33 @@ export default function Home() {
               setShowAnalysisOverlay(false);
               
               // Update UI with results
-              setAnalysis(data.analysis);
+              setAnalysis(Array.isArray(data.analysis) ? data.analysis : []);
               setSummary(data.summary || "");
               setPrologue(data.prologue || "");
               setConstructiveCriticism(data.constructiveCriticism || "");
+              
+              // Also update other data
+              if (data.characters) {
+                setCharacterMap(data.characters.characterMap || {});
+                setMainCharacters(data.characters.mainCharacters || []);
+              }
+              
+              if (data.timeline) {
+                setPlotTimeline(data.timeline || []);
+              }
+              
+              if (data.worldBuilding) {
+                setWorldBuildingElements({
+                  locations: data.worldBuilding.locations || {},
+                  customs: data.worldBuilding.customs || [],
+                  history: data.worldBuilding.history || [],
+                  rules: data.worldBuilding.rules || [],
+                  technology: data.worldBuilding.technology || [],
+                  socialStructure: data.worldBuilding.socialStructure || []
+                });
+              }
+              
+              console.log("Analysis data received in interval check:", data.analysis);
               message.success("Analysis completed successfully!", 5);
             }
           })
@@ -1302,6 +1349,7 @@ export default function Home() {
                     }
 
                     const data = await response.json();
+                    console.log("API Response Data:", data); // Add this line
                     
                     if (data.error) {
                         throw new Error(data.error);
@@ -2863,6 +2911,20 @@ export default function Home() {
         }
     };
 
+    // Add this useEffect to log the state of the animation variables
+    useEffect(() => {
+        if (showAnalysisOverlay) {
+            console.log("Analysis overlay is visible!");
+            console.log("Progress:", progress);
+            console.log("Animation variables:", {
+                showLoader,
+                vercelDeployment,
+                analysisStage,
+                loading
+            });
+        }
+    }, [showAnalysisOverlay, progress, showLoader, vercelDeployment, analysisStage, loading]);
+
     return (
         <AntApp>
             {contextHolder}
@@ -3074,7 +3136,7 @@ export default function Home() {
                             </Row>
                         )}
 
-                        {files.length > 0 && files[0]?.analysis && (
+                        {analysis.length > 0 && (
                             <>
                                 {/* Generate Report Buttons */}
                                 <Row justify="center" style={{ marginTop: '20px' }}>
@@ -4319,45 +4381,26 @@ export default function Home() {
                     
                     <div style={{ maxWidth: '600px', textAlign: 'center' }}>
                         <div className="loader-container">
-                            {progress < 100 ? (
-                                vercelDeployment ? (
-                                    <div className="brain-container">
-                                        <div className="brain">🧠</div>
-                                        <div className="ai-message">AI Analyzing Book</div>
-                                        <div className="thinking-dots">
-                                            <div className="dot"></div>
-                                            <div className="dot"></div>
-                                            <div className="dot"></div>
-                                        </div>
-                                        {/* Add this activity ticker */}
-                                        <div className="activity-ticker" style={{ 
-                                          fontSize: '11px', 
-                                          color: '#666',
-                                          marginTop: '15px',
-                                          height: '16px',
-                                          overflow: 'hidden'
-                                        }}>
-                                          {['Reading text...', 'Processing chapters...', 'Analyzing characters...', 'Evaluating plot...', 'Finding themes...'][Math.floor(Date.now()/1000) % 5]}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="book-loading">
-                                        <div className="book">
-                                            <div className="page"></div>
-                                            <div className="page"></div>
-                                            <div className="page"></div>
-                                        </div>
-                                    </div>
-                                )
-                            ) : (
-                                <div className="success-animation">
-                                    <div className="checkmark">
-                                        <div className="check"></div>
-                                    </div>
+                            {/* REPLACE with simplified animation that is guaranteed to show */}
+                            <div className="book-loading">
+                                <div className="book">
+                                    <div className="page"></div>
+                                    <div className="page"></div>
+                                    <div className="page"></div>
                                 </div>
-                            )}
+                            </div>
+                            
+                            <div className="brain-container">
+                                <div className="brain">🧠</div>
+                                <div className="ai-message">AI Analyzing Book</div>
+                                <div className="thinking-dots">
+                                    <div className="dot"></div>
+                                    <div className="dot"></div>
+                                    <div className="dot"></div>
+                                </div>
+                            </div>
                         </div>
-
+                        
                         <div className="processingIndicator">
                             {vercelDeployment ? (
                                 <div className="serverless-processing" style={{ 
