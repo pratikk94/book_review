@@ -1115,7 +1115,10 @@ export default function Home() {
                     }
                     
                     if (data.jobId) {
-                        setJobId(data.jobId); // Set job ID at the top level for easier access
+                        // First set the job ID
+                        setJobId(data.jobId);
+                        
+                        // Update file status
                         setFiles(prev => prev.map((f, i) => 
                             i === index ? { ...f, jobId: data.jobId } : f
                         ));
@@ -1128,15 +1131,20 @@ export default function Home() {
                             'Results will appear when processing is complete.'
                         ]);
                         
-                        // Add these lines to ensure jobId is properly set before checking progress:
+                        // Use a more reliable approach to ensure jobId is set before starting progress check
+                        console.log(`Job ID received: ${data.jobId}, setting up progress check`);
+                        
+                        // Wait for jobId to be set in state before starting progress check
                         setTimeout(() => {
+                            // Double check that jobId exists before starting progress check
                             if (data.jobId) {
+                                console.log(`Starting progress check for job ${data.jobId}`);
                                 startSimpleProgressCheck();
                             } else {
                                 console.error("JobId still not available after upload");
                                 setProgress(10); // Set some initial progress to show activity
                             }
-                        }, 500);
+                        }, 1000); // Give enough time for state to update
                     } else {
                         throw new Error('No job ID received from server');
                     }
@@ -2427,27 +2435,40 @@ export default function Home() {
                 if (savedJobId && !analysis.length) {
                     console.log('Recovered job ID from session:', savedJobId);
                     setJobId(savedJobId);
+                    
                     // Try to get results for the saved job ID
                     fetch(`/api/analyze?finalResult=true&jobId=${savedJobId}`)
-                        .then(response => response.ok ? response.json() : null)
-                        .then(data => {
-                            if (data && data.analysis) {
-                                setAnalysis(data.analysis);
-                                setSummary(data.summary || "");
-                                setPrologue(data.prologue || "");
-                                setConstructiveCriticism(data.constructiveCriticism || "");
-                                message.success('Recovered your previous analysis!');
-                                setShowAnalysisOverlay(false);
-                            }
-                        })
-                        .catch(() => {
-                            // Clear saved job ID if it's no longer valid
-                            sessionStorage.removeItem('currentJobId');
-                        });
+                      .then(response => response.ok ? response.json() : null)
+                      .then(data => {
+                        if (data && data.analysis) {
+                          setAnalysis(data.analysis);
+                          setSummary(data.summary || "");
+                          setPrologue(data.prologue || "");
+                          setConstructiveCriticism(data.constructiveCriticism || "");
+                          message.success('Recovered your previous analysis!');
+                          setShowAnalysisOverlay(false);
+                        } else {
+                          // If we recovered the jobId but don't have results yet, start the progress check
+                          console.log("Recovered job ID but analysis still in progress, starting progress check");
+                          setTimeout(() => {
+                            // Ensure jobId is set in the state before starting progress check
+                            setJobId(savedJobId);
+                            setTimeout(() => {
+                              if (savedJobId) {
+                                startSimpleProgressCheck();
+                              }
+                            }, 500);
+                          }, 1000);
+                        }
+                      })
+                      .catch(() => {
+                        // Clear saved job ID if it's no longer valid
+                        sessionStorage.removeItem('currentJobId');
+                      });
                 }
             }
         }
-    }, [jobId]);
+    }, [jobId, analysis.length, progress]);
 
     // In the useEffect where you initialize the app
     useEffect(() => {
