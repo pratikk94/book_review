@@ -927,12 +927,6 @@ export default function Home() {
                     setPrologue(data.prologue || "");
                     setConstructiveCriticism(data.constructiveCriticism || "");
                     
-                    // Make sure we've selected a file to view the results
-                    if (selectedFileIndex === null && files.length > 0) {
-                        setSelectedFileIndex(0);
-                        console.log("Auto-selected first file to view results");
-                    }
-                    
                     message.success("Analysis completed successfully!", 5);
                 } else if (data.message && data.message.includes("being analyzed")) {
                     // Specific handling for "still being analyzed" messages
@@ -1230,7 +1224,7 @@ export default function Home() {
         progressCheckRunningRef.current = false;
         console.log("Starting new upload - reset progress tracking state");
         
-        // IMMEDIATELY select the first file (no dropdown needed)
+        // Auto-select the first file by default
         setSelectedFileIndex(0);
         console.log("Auto-selected first file for analysis");
         
@@ -2823,12 +2817,6 @@ export default function Home() {
           markJobCompleted(jobId);
           console.log(`Marked job ${jobId} as completed in forceRefreshUI`);
         }
-        
-        // Auto-select the first file if none is selected
-        if (selectedFileIndex === null && files.length > 0) {
-          setSelectedFileIndex(0);
-          console.log("Auto-selected first file");
-        }
       }
       
       // Update UI states
@@ -2887,15 +2875,6 @@ export default function Home() {
             return false;
         }
     };
-
-    // Effect to auto-select the first file when files are available
-    useEffect(() => {
-        // Auto-select first file always when files are available and none is selected
-        if (files.length > 0 && selectedFileIndex === null) {
-            setSelectedFileIndex(0);
-            console.log("Auto-selected first file (useEffect)");
-        }
-    }, [files.length, selectedFileIndex]);
 
     return (
         <AntApp>
@@ -3098,18 +3077,30 @@ export default function Home() {
                         {files.length > 0 && (
                             <Row justify="center" style={{ marginTop: '20px' }}>
                                 <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                                    {files.length > 1 && (
-                                        <Button
-                                            type="primary"
-                                            onClick={() => setShowComparison(!showComparison)}
-                                            style={{ 
-                                                marginBottom: '20px',
-                                                background: '#1890ff'
-                                            }}
+                                    <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: '20px' }}>
+                                        <Select
+                                            style={{ width: 300 }}
+                                            placeholder="Select a file to view"
+                                            onChange={(value) => setSelectedFileIndex(value)}
+                                            value={selectedFileIndex}
                                         >
-                                            {showComparison ? 'Hide Comparison' : 'Compare Files'}
-                                        </Button>
-                                    )}
+                                            {files.map((file, index) => (
+                                                <Select.Option key={index} value={index}>
+                                                    {file.file.name}
+                                                </Select.Option>
+                                            ))}
+                                        </Select>
+                                        
+                                        {files.length > 1 && (
+                                            <Button
+                                                type="primary"
+                                                icon={<SwapOutlined />}
+                                                onClick={() => setShowComparison(!showComparison)}
+                                            >
+                                                {showComparison ? 'Hide Comparison' : 'Compare Files'}
+                                            </Button>
+                                        )}
+                                    </Space>
                                     
                                     {showComparison && renderComparison()}
                                 </Col>
@@ -3137,111 +3128,1467 @@ export default function Home() {
                                         >
                                             Generate Analysis Report (DOCX)
                                         </Button>
-                                    </Col>
-                                </Row>
-
-                                {/* Main Analysis Report Card */}
-                                <Row justify="center" gutter={[0, 24]}>
-                                    <Col xs={24} sm={22} md={20} lg={18} xl={16}>
-                                        <Card 
-                                            title={
-                                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                                    <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                                                    <span style={{ color: '#000000' }}>Analysis Report</span>
-                                                </div>
-                                            }
-                                            className="custom-card fade-in"
-                                            style={{ 
-                                                marginTop: '20px',
-                                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                                                borderRadius: '8px',
-                                                background: '#ffffff'
+                                        
+                                        <Button 
+                                            type="default"
+                                            icon={<FilePdfOutlined />}
+                                            onClick={generateSimplePdf}
+                                            size="middle"
+                                            className="secondary-button mobile-responsive-button"
+                                            style={{
+                                                marginLeft: '10px',
+                                                height: 'auto',
+                                                padding: '8px 15px'
                                             }}
                                         >
-                                            {/* Analysis Content */}
-                                            <div>
-                                                {analysis.map((item, index) => (
-                                                    <Card
-                                                        key={index}
-                                                        className="parameter-card"
-                                                        style={{
-                                                            marginBottom: '20px',
-                                                            borderRadius: '12px',
-                                                            overflow: 'hidden',
-                                                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
-                                                        }}
-                                                        title={
-                                                            <div style={{ 
-                                                                display: 'flex', 
-                                                                justifyContent: 'space-between',
-                                                                alignItems: 'center'
-                                                            }}>
-                                                                <span style={{ 
-                                                                    fontWeight: 'bold',
-                                                                    color: '#333'
-                                                                }}>
-                                                                    {item.Parameter}
-                                                                </span>
-                                                                <div>
-                                                                    Score: {item.Score}
-                                                                </div>
-                                                            </div>
-                                                        }
-                                                    >
-                                                        <div>{item.Justification}</div>
-                                                    </Card>
-                                                ))}
-                                                
-                                                {summary && (
-                                                    <div className="book-summary fade-in" style={{ marginBottom: '30px' }}>
-                                                        <Title level={4}>Book Summary</Title>
-                                                        <Paragraph>{summary}</Paragraph>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            
-                                            <Button 
-                                                type="primary"
-                                                icon={<FileTextOutlined />}
-                                                onClick={generateSimpleDocx}
-                                                loading={capturingPdf}
-                                                className="pdf-button"
+                                            Text-Only Report
+                                        </Button>
+                                        
+                                        {pdfSuccess && (
+                                            <Alert
+                                                message="DOCX Report Generated Successfully"
+                                                description="Your DOCX has been saved to your downloads folder."
+                                                type="success"
+                                                showIcon
+                                                closable
+                                                onClose={() => setPdfSuccess(false)}
+                                                className="pdf-success"
                                                 style={{ 
-                                                    marginTop: '15px',
-                                                    background: '#52c41a', 
-                                                    borderColor: '#52c41a',
-                                                    padding: '8px 16px',
-                                                    height: 'auto'
+                                                    marginTop: '10px',
+                                                    width: '100%',
+                                                    maxWidth: '600px',
+                                                    margin: '10px auto'
                                                 }}
-                                            >
-                                                Generate Word Document
-                                            </Button>
-                                        </Card>
+                                            />
+                                        )}
                                     </Col>
                                 </Row>
-                            </>
-                        )}
-                    </Content>
-            
-                    <Footer style={{ 
-                        textAlign: 'center', 
-                        background: '#ffffff',
-                        padding: '10px',
-                        color: '#000000',
-                        borderTop: '1px solid #f0f0f0'
-                    }}>
-                        eBook AI Analyzer ©{new Date().getFullYear()} - Powered by Next.js and OpenAI
-                    </Footer>
 
-                    {/* Analysis Overlay */}
-                    {showAnalysisOverlay && (
-                        <div className="analyzerOverlay">
-                            {/* Overlay content */}
-                        </div>
+                                {/* Editorial Feedback Card */}
+                                {constructiveCriticism && (
+                                    <Row justify="center" gutter={[0, 24]}>
+                                        <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                            <Card 
+                                                title={
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                            <EditOutlined style={{ marginRight: 8, color: '#fa8c16', fontSize: '20px' }} />
+                                                            <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#fa8c16' }}>Editorial Assessment</span>
+                                                    </div>
+                                                }
+                                                className="custom-card editorial-card fade-in"
+                                                style={{ 
+                                                    marginTop: '20px',
+                                                        boxShadow: '0 4px 20px rgba(250, 140, 22, 0.15)',
+                borderRadius: '12px',
+                                                        borderTop: '4px solid #fa8c16',
+                                                        background: '#ffffff'
+                                                }}
+                                                variant="outlined"
+                                                hoverable
+                                            >
+                                                <div ref={editorialContentRef}>
+                                                    <div style={{
+                                                            padding: '15px 20px',
+                                                            background: 'rgba(250, 140, 22, 0.05)',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '20px',
+                                                            border: '1px solid rgba(250, 140, 22, 0.2)'
+                                                        }}>
+                                                            <Typography.Text type="secondary" style={{ fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginBottom: '8px' }}>
+                                                                Professional Editorial Feedback
+                                                            </Typography.Text>
+                                                            <Typography.Text style={{ fontSize: '16px', display: 'block', color: '#333' }}>
+                                                                Curated recommendations to enhance your book's quality and impact.
+                                                            </Typography.Text>
+                                                        </div>
+                                                        
+                                                        {/* Key Recommendation Highlight */}
+                                                        <div style={{
+                                                            padding: '20px',
+                                                            background: 'linear-gradient(to right, rgba(250, 140, 22, 0.1), rgba(250, 140, 22, 0.02))',
+                                                            borderRadius: '12px',
+                                                            marginBottom: '25px',
+                                                            border: '1px dashed #fa8c16',
+                                                            position: 'relative',
+                                                            overflow: 'hidden'
+                                                        }}>
+                                                            <div style={{ 
+                                                                position: 'absolute', 
+                                                                top: 0, 
+                                                                left: 0, 
+                                                                width: '5px', 
+                                                                height: '100%', 
+                                                                background: '#fa8c16' 
+                                                            }}></div>
+                                                            <Title level={5} style={{ color: '#fa8c16', marginTop: 0, position: 'relative' }}>
+                                                                TOP PRIORITY
+                                                                <div style={{ 
+                                                                    position: 'absolute', 
+                                                                    top: '50%', 
+                                                                    right: '-5px', 
+                                                                    width: '30px', 
+                                                                    height: '30px', 
+                                                                    transform: 'translateY(-50%)', 
+                                                                    opacity: 0.2 
+                                                                }}>
+                                                                    <EditOutlined style={{ fontSize: '30px', color: '#fa8c16' }} />
+                                                                </div>
+                                                            </Title>
+                                                            
+                                                            <Title level={5} style={{ 
+                                                                marginTop: '15px', 
+                                                                marginBottom: '10px', 
+                                                                fontWeight: '500',
+                                                                color: '#555',
+                                                                fontSize: '15px'
+                                                            }}>
+                                                                EDITOR'S KEY RECOMMENDATION
+                                                            </Title>
+                                                            
+                                                            <Paragraph style={{ 
+                                                                fontWeight: 400, 
+                                                                fontSize: '15px', 
+                                                                lineHeight: '1.6', 
+                                                                color: '#333'
+                                                            }}>
+                                                                {constructiveCriticism.split('\n')[0].split(/(\*\*.*?\*\*)/).map((part, idx) => {
+                                                                    // Check if this part is a heading encased in asterisks
+                                                                    if (part.startsWith('**') && part.endsWith('**')) {
+                                                                        const headingText = part.substring(2, part.length - 2);
+                                                                        return (
+                                                                            <span 
+                                                                                key={idx}
+                                                                                style={{
+                                                                                    fontWeight: 'bold',
+                                                                                    color: '#fa8c16',
+                                                                                    padding: '0 2px'
+                                                                                }}
+                                                                            >
+                                                                                {headingText}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    
+                                                                    // Regular text
+                                                                    return (
+                                                                        <span key={idx}>
+                                                                            {part}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                    </Paragraph>
+                                                </div>
+                                                    
+                                                    {/* Detailed Feedback */}
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <Title level={5} style={{ 
+                                                            borderBottom: '2px solid #f0f0f0', 
+                                                            paddingBottom: '10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            color: '#333'
+                                                        }}>
+                                                            <CommentOutlined style={{ marginRight: '8px', color: '#fa8c16' }} />
+                                                            DETAILED FEEDBACK
+                                                        </Title>
+                                            
+                                            <div style={{ fontSize: '15px', lineHeight: '1.8' }}>
+                                                {constructiveCriticism.split('\n').slice(1).map((paragraph, i) => {
+                                                    // Check if paragraph is a numbered point with a heading (e.g., "1. **Copyright Notice**")
+                                                    const numberedHeadingMatch = paragraph.match(/^(\d+)\.\s+\*\*(.*?)\*\*:?(.*)$/);
+                                                    
+                                                    // Check if paragraph starts with a heading like "**Cover Page:**"
+                                                    const standaloneHeadingMatch = paragraph.match(/^\*\*(.*?)(?:\*\*:|\*\*)(.*)$/);
+                                                    
+                                                    if (numberedHeadingMatch) {
+                                                        const [, number, headingText, remainingText] = numberedHeadingMatch;
+                                                        
+                                                        return (
+                                                            <div className="feedback-entry" key={i} style={{
+                                                                marginBottom: '20px',
+                                                                padding: '15px',
+                                                                background: 'white',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #f0f0f0',
+                                                                boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    marginBottom: '12px'
+                                                                }}>
+                                                                    <div style={{ 
+                                                                        width: '28px',
+                                                                        height: '28px',
+                                                                        borderRadius: '50%',
+                                                                        background: 'rgba(250, 140, 22, 0.1)',
+                                                                        color: '#fa8c16',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        fontWeight: 'bold',
+                                                                        marginRight: '10px'
+                                                                    }}>
+                                                                        {number}
+                                                                    </div>
+                                                                    <h4 style={{ 
+                                                                        margin: '0',
+                                                                        fontSize: '16px',
+                                                                        fontWeight: 'bold',
+                                                                        color: '#fa8c16'
+                                                                    }}>
+                                                                        {headingText}
+                                                                    </h4>
+                                                                </div>
+                                                                
+                                                                <Paragraph style={{ 
+                                                                    margin: '0 0 0 38px',
+                                                                    fontSize: '14px',
+                                                                    color: '#555'
+                                                                }}>
+                                                                    {remainingText}
+                                                                </Paragraph>
+                                                            </div>
+                                                        );
+                                                    } else if (standaloneHeadingMatch) {
+                                                        // Handle standalone headings like "**Cover Page:**"
+                                                        const [, headingText, remainingText] = standaloneHeadingMatch;
+                                                        
+                                                        return (
+                                                            <div className="feedback-entry" key={i} style={{
+                                                                marginBottom: '20px',
+                                                                padding: '15px',
+                                                                background: 'white',
+                                                                borderRadius: '8px',
+                                                                border: '1px solid #f0f0f0',
+                                                                boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    marginBottom: '12px'
+                                                                }}>
+                                                                    <h4 style={{ 
+                                                                        margin: '0',
+                                                                        fontSize: '16px',
+                                                                        fontWeight: 'bold',
+                                                                        color: '#fa8c16',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center'
+                                                                    }}>
+                                                                        <div style={{ 
+                                                                            width: '8px', 
+                                                                            height: '8px', 
+                                                                            borderRadius: '50%', 
+                                                                            background: '#fa8c16', 
+                                                                            marginRight: '8px' 
+                                                                        }}></div>
+                                                                        {headingText}
+                                                                    </h4>
+                                                                </div>
+                                                                
+                                                                <Paragraph style={{ 
+                                                                    margin: '0 0 0 16px',
+                                                                    fontSize: '14px',
+                                                                    color: '#555'
+                                                                }}>
+                                                                    {remainingText}
+                                                                </Paragraph>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    
+                                                    // Handle regular paragraphs or other ** patterns
+                                                    // Split the paragraph into words and wrap suggestions in spans
+                                                    const words = paragraph.split(/(\s+)/);
+                                                    const suggestionWords = [
+                                                        'should consider', 'recommend', 'could improve', 'suggest',
+                                                        'try to', 'focus on', 'needs to', 'must', 'important to',
+                                                        'enhance', 'revise', 'develop', 'strengthen', 'add',
+                                                        'remove', 'modify', 'prioritize'
+                                                    ];
+                                                    
+                                                    return (
+                                                        <div className="feedback-entry" key={i} style={{
+                                                            marginBottom: '15px',
+                                                            padding: '12px 15px',
+                                                            background: i % 2 === 0 ? '#fafafa' : 'transparent',
+                                                            borderRadius: '8px'
+                                                        }}>
+                                                            <Paragraph style={{ margin: 0 }}>
+                                                                {words.map((word, j) => {
+                                                                    // Check if word contains ** pattern indicating heading
+                                                                    if (word.startsWith('**') && word.endsWith('**')) {
+                                                                        const headingText = word.substring(2, word.length - 2);
+                                                                        return (
+                                                                            <h4 
+                                                                                key={j}
+                                                                                style={{
+                                                                                    margin: '15px 0 8px', 
+                                                                                    color: '#fa8c16', 
+                                                                                    fontSize: '16px', 
+                                                                                    borderBottom: '1px solid #f0f0f0', 
+                                                                                    paddingBottom: '5px',
+                                                                                    fontWeight: 'bold',
+                                                                                    display: 'block',
+                                                                                    width: '100%'
+                                                                                }}
+                                                                            >
+                                                                                {headingText}
+                                                                            </h4>
+                                                                        );
+                                                                    }
+                                                                    
+                                                                    const isSuggestion = suggestionWords.some(suggestion => 
+                                                                        word.toLowerCase().includes(suggestion)
+                                                                    );
+                                                                    return (
+                                                                        <span 
+                                                                            key={j}
+                                                                            style={{
+                                                                                backgroundColor: isSuggestion ? 'rgba(250, 140, 22, 0.1)' : 'transparent',
+                                                                                color: isSuggestion ? '#fa8c16' : 'inherit',
+                                                                                padding: isSuggestion ? '0 4px' : '0',
+                                                                                borderRadius: isSuggestion ? '3px' : '0',
+                                                                                fontWeight: isSuggestion ? '500' : 'normal'
+                                                                            }}
+                                                                        >
+                                                                            {word}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </Paragraph>
+                                                        </div>
+                                                    );
+                                                })}
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Action Steps */}
+                                                <div style={{
+                                                    background: '#f9f9f9',
+                                                    borderRadius: '10px',
+                                                    padding: '20px',
+                                                    marginTop: '25px',
+                                                    border: '1px solid #eee'
+                                                }}>
+                                                    <Title level={5} style={{ color: '#333', marginTop: 0, marginBottom: '15px' }}>
+                                                        RECOMMENDED NEXT STEPS
+                                                    </Title>
+                                                    <Row gutter={[16, 16]}>
+                                                        <Col span={8}>
+                                                            <div style={{ 
+                                                                textAlign: 'center', 
+                                                                padding: '15px', 
+                                                                background: 'white', 
+                                                                borderRadius: '8px', 
+                                                                height: '100%',
+                                                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    width: '40px', 
+                                                                    height: '40px', 
+                                                                    borderRadius: '50%', 
+                                                                    background: 'rgba(250, 140, 22, 0.1)', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center',
+                                                                    margin: '0 auto 10px'
+                                                                }}>
+                                                                    <span style={{ color: '#fa8c16', fontWeight: 'bold' }}>1</span>
+                                                                </div>
+                                                                <Typography.Text strong style={{ display: 'block', marginBottom: '5px' }}>Review Analysis</Typography.Text>
+                                                                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                                                                    Carefully consider each point in the editorial assessment
+                                                                </Typography.Text>
+                                                            </div>
+                                                        </Col>
+                                                        <Col span={8}>
+                                                            <div style={{ 
+                                                                textAlign: 'center', 
+                                                                padding: '15px', 
+                                                                background: 'white', 
+                                                                borderRadius: '8px', 
+                                                                height: '100%',
+                                                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    width: '40px', 
+                                                                    height: '40px', 
+                                                                    borderRadius: '50%', 
+                                                                    background: 'rgba(250, 140, 22, 0.1)', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center',
+                                                                    margin: '0 auto 10px'
+                                                                }}>
+                                                                    <span style={{ color: '#fa8c16', fontWeight: 'bold' }}>2</span>
+                                                                </div>
+                                                                <Typography.Text strong style={{ display: 'block', marginBottom: '5px' }}>Prioritize Changes</Typography.Text>
+                                                                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                                                                    Focus on addressing major issues first
+                                                                </Typography.Text>
+                                                            </div>
+                                                        </Col>
+                                                        <Col span={8}>
+                                                            <div style={{ 
+                                                                textAlign: 'center', 
+                                                                padding: '15px', 
+                                                                background: 'white', 
+                                                                borderRadius: '8px', 
+                                                                height: '100%',
+                                                                boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                <div style={{ 
+                                                                    width: '40px', 
+                                                                    height: '40px', 
+                                                                    borderRadius: '50%', 
+                                                                    background: 'rgba(250, 140, 22, 0.1)', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center',
+                                                                    margin: '0 auto 10px'
+                                                                }}>
+                                                                    <span style={{ color: '#fa8c16', fontWeight: 'bold' }}>3</span>
+                                                                </div>
+                                                                <Typography.Text strong style={{ display: 'block', marginBottom: '5px' }}>Implement Revisions</Typography.Text>
+                                                                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                                                                    Make targeted improvements based on feedback
+                                                                </Typography.Text>
+                                                            </div>
+                                                        </Col>
+                                                    </Row>
+                                                </div>
+                                                
+                                                {/* Additional Sections - Table of Contents & Introduction */}
+                                                <div style={{ 
+                                                    marginTop: '30px',
+                                                    padding: '20px',
+                                                    background: 'rgba(250, 140, 22, 0.03)',
+                                                    borderRadius: '8px'
+                                                }}>
+                                                    <div style={{ marginBottom: '20px' }}>
+                                                        <h4 style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: 'bold',
+                                                            color: '#fa8c16',
+                                                            marginBottom: '10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <div style={{ 
+                                                                width: '8px', 
+                                                                height: '8px', 
+                                                                borderRadius: '50%', 
+                                                                background: '#fa8c16', 
+                                                                marginRight: '8px' 
+                                                            }}></div>
+                                                            TABLE OF CONTENTS
+                                                        </h4>
+                                                        <Paragraph style={{ paddingLeft: '16px' }}>
+                                                            While functional, the table of contents could be more engaging. Consider adding titles to the chapters if possible, which can serve as intriguing previews that stimulate interest. If the chapters must remain numerically listed, a brief, thematic subtitle could add a layer of mystery and anticipation.
+                                                        </Paragraph>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <h4 style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: 'bold',
+                                                            color: '#fa8c16',
+                                                            marginBottom: '10px',
+                                                            display: 'flex',
+                                                            alignItems: 'center'
+                                                        }}>
+                                                            <div style={{ 
+                                                                width: '8px', 
+                                                                height: '8px', 
+                                                                borderRadius: '50%', 
+                                                                background: '#fa8c16', 
+                                                                marginRight: '8px' 
+                                                            }}></div>
+                                                            INTRODUCTION
+                                                        </h4>
+                                                        <Paragraph style={{ paddingLeft: '16px' }}>
+                                                            The introduction promises a deep dive into the complexities of the human mind through the lens of hypnosis. It's beautifully written but stops abruptly. Ensure that this section flows seamlessly into the body of the book, perhaps by ending with a question, a statement of intent, or a brief overview of what the reader can expect to discover within the pages.
+                                                        </Paragraph>
+                                                    </div>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </Col>
+                            </Row>
+                        )}
+                        
+                        {/* Main Analysis Report Card */}
+                        <Row justify="center" gutter={[0, 24]}>
+                            <Col xs={24} sm={22} md={20} lg={18} xl={16}>
+                                <Card 
+                                    title={
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                            <span style={{ color: '#000000' }}>Analysis Report</span>
+                                        </div>
+                                    }
+                                    className="custom-card fade-in"
+                                    style={{ 
+                                        marginTop: '20px',
+                                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                        borderRadius: '8px',
+                                        background: '#ffffff'
+                                    }}
+                                    extra={
+                                        <Button
+                                            type="primary"
+                                            icon={<DownloadOutlined />}
+                                            onClick={() => generateIndividualReport(selectedFileIndex)}
+                                        >
+                                            Download Report
+                                        </Button>
+                                    }
+                                >
+                                    <div ref={analysisContentRef}>
+                                        {summary && (
+                                                <div className="book-summary fade-in" style={{ marginBottom: '30px' }}>
+                                                <Title level={4}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <BookOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                                        <span>Book Summary</span>
+                                                    </div>
+                                                </Title>
+                                                    <div style={{
+                                                        padding: '20px',
+                                                        background: 'linear-gradient(to right, rgba(24, 144, 255, 0.05), rgba(24, 144, 255, 0.01))',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid rgba(24, 144, 255, 0.1)',
+                                                        position: 'relative'
+                                                    }}>
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '10px',
+                                                            right: '10px',
+                                                            fontSize: '24px',
+                                                            color: 'rgba(24, 144, 255, 0.1)'
+                                                        }}>
+                                                            <BookOutlined />
+                                                        </div>
+                                                        {summary.split('\n').map((paragraph, i) => {
+                                                            // Process paragraphs to convert ** to headings
+                                                            if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+                                                                const headingText = paragraph.substring(2, paragraph.length - 2);
+                                                                return (
+                                                                    <div key={i}>
+                                                                        <h4 style={{ 
+                                                                            margin: '15px 0 8px', 
+                                                                            color: '#1890ff', 
+                                                                            fontSize: '16px', 
+                                                                            borderBottom: '1px solid rgba(24, 144, 255, 0.2)', 
+                                                                            paddingBottom: '5px',
+                                                                            fontWeight: 'bold'
+                                                                        }}>
+                                                                            {headingText}
+                                                                        </h4>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            
+                                                            // Check for ** patterns within paragraph
+                                                            const processedText = paragraph.replace(
+                                                                /\*\*(.*?)\*\*/g, 
+                                                                '<h4 style="margin: 15px 0 8px; color: #1890ff; font-size: 16px; border-bottom: 1px solid rgba(24, 144, 255, 0.2); padding-bottom: 5px;">$1</h4>'
+                                                            );
+                                                            
+                                                            if (processedText !== paragraph) {
+                                                                return (
+                                                                    <div 
+                                                                        key={i} 
+                                                                        dangerouslySetInnerHTML={{ __html: processedText }}
+                                                                        style={{ 
+                                                                            marginBottom: i < summary.split('\n').length - 1 ? '16px' : 0,
+                                                                        }}
+                                                                    />
+                                                                );
+                                                            }
+                                                            
+                                                            return (
+                                                                <Paragraph key={i} style={{ 
+                                                                    fontSize: '15px', 
+                                                                    lineHeight: '1.8',
+                                                                    marginBottom: i < summary.split('\n').length - 1 ? '16px' : 0,
+                                                                    textAlign: 'justify'
+                                                                }}>
+                                                                    {paragraph}
+                                                </Paragraph>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                <Divider />
+                                            </div>
+                                        )}
+                                        
+                                        {/* Overall Score Section */}
+                                        <div className="overall-score-section fade-in" style={{ marginBottom: '20px' }}>
+                                            <Title level={4}>Overall Assessment</Title>
+                                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                                                <Progress 
+                                                    className="dashboard-animate"
+                                                    type="dashboard" 
+                                                    percent={results.percentage} 
+                                                    size={120}
+                                                    format={() => (
+                                                        <div>
+                                                            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{results.totalScore}</div>
+                                                            <div style={{ fontSize: '12px' }}>out of {results.maxPossibleScore}</div>
+                                                        </div>
+                                                    )}
+                                                    strokeColor={
+                                                        results.percentage >= 80 ? '#52c41a' : // Excellent
+                                                        results.percentage >= 60 ? '#faad14' : // Good
+                                                        '#f5222d'                             // Needs improvement
+                                                    }
+                                                />
+                                            </div>
+                                            
+                                            {results.strengths.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <Title level={5}>Strengths</Title>
+                                                    <ul>
+                                                        {results.strengths.map((strength, index) => {
+                                                            // Truncate strengths to max 20 words
+                                                            const words = strength.split(' ');
+                                                            const truncatedStrength = words.length > 20 
+                                                                ? words.slice(0, 20).join(' ') + '...'
+                                                                : strength;
+                                                            
+                                                            return (
+                                                                <li className="strength-item" key={index}>{truncatedStrength}</li>
+                                                            );
+                                                        })}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            
+                                            {results.improvements.length > 0 && (
+                                                <div style={{ marginBottom: '15px' }}>
+                                                    <Title level={5}>Recommended Improvements</Title>
+                                                    <ul>
+                                                        {results.improvements.map((item, index) => (
+                                                            <li className="improvement-item" key={index}>
+                                                                <strong>{item.area}</strong> (Score: {item.score}/5): {item.justification}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            
+                                            {/* Score interpretation */}
+                                            <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
+                                                <Alert
+                                                    message={
+                                                        results.percentage >= 80 ? "Excellent" :
+                                                        results.percentage >= 60 ? "Good" :
+                                                        results.percentage >= 40 ? "Average" :
+                                                        "Needs Improvement"
+                                                    }
+                                                    description={
+                                                        results.percentage >= 80 ? "This eBook demonstrates exceptional quality across most parameters." :
+                                                        results.percentage >= 60 ? "This eBook has good overall quality with some areas for improvement." :
+                                                        results.percentage >= 40 ? "This eBook meets basic standards but has several areas that need attention." :
+                                                        "This eBook requires significant improvements in multiple areas."
+                                                    }
+                                                    type={
+                                                        results.percentage >= 80 ? "success" :
+                                                        results.percentage >= 60 ? "info" :
+                                                        results.percentage >= 40 ? "warning" :
+                                                        "error"
+                                                    }
+                                                    showIcon
+                                                />
+                                            </div>
+                                            
+                                            {/* Extra guidance for low scores */}
+                                            {results.percentage < 40 && (
+                                                <div style={{ marginBottom: '20px' }}>
+                                                    <Title level={5}>General Improvement Suggestions</Title>
+                                                    <ul>
+                                                        <li>Consider having the text professionally edited to improve readability and flow.</li>
+                                                        <li>Check for grammatical errors and typos throughout the document.</li>
+                                                        <li>Work on improving the structure with clear chapter divisions and sections.</li>
+                                                        <li>Ensure formatting is consistent throughout the book.</li>
+                                                        <li>Consider adding more original insights or examples to enhance content value.</li>
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            
+                                            <Divider />
+                                        </div>
+                                        
+                                        <Title level={4}>Detailed Analysis</Title>
+                                            <div className="parameter-cards-container" style={{ marginBottom: '30px' }}>
+                                                {analysis.map((item, index) => {
+                                                    // Scale down score if it's out of 10
+                                                    const scaledScore = item.Score > 5 ? item.Score / 2 : item.Score;
+                                                    let scoreColor = '#f5222d'; // Red for low scores
+                                                    let bgColor = 'rgba(245, 34, 45, 0.05)';
+                                                    let borderColor = 'rgba(245, 34, 45, 0.2)';
+                                                    
+                                                    if (scaledScore >= 4) {
+                                                        scoreColor = '#52c41a'; // Green for high scores
+                                                        bgColor = 'rgba(82, 196, 26, 0.05)';
+                                                        borderColor = 'rgba(82, 196, 26, 0.2)';
+                                                    } else if (scaledScore >= 3) {
+                                                        scoreColor = '#faad14'; // Yellow for medium scores
+                                                        bgColor = 'rgba(250, 173, 20, 0.05)';
+                                                        borderColor = 'rgba(250, 173, 20, 0.2)';
+                                                    }
+                                                    
+                                                    return (
+                                                        <Card
+                                                            key={index}
+                                                            className="parameter-card"
+                                                            style={{
+                                                                marginBottom: '20px',
+                                                                borderRadius: '12px',
+                                                                overflow: 'hidden',
+                                                                border: `1px solid ${borderColor}`,
+                                                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                                                            }}
+                                                            title={
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center'
+                                                                }}>
+                                                                    <span style={{ 
+                                                                        fontWeight: 'bold',
+                                                                        color: '#333'
+                                                                    }}>
+                                                                        {item.Parameter}
+                                                                    </span>
+                                                                    <div style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '10px'
+                                                                    }}>
+                                                                        <span style={{ 
+                                                                            fontSize: '14px',
+                                                                            color: '#888'
+                                                                        }}>
+                                                                            Score:
+                                                                        </span>
+                                                                        <div style={{
+                                                                            width: '40px',
+                                                                            height: '40px',
+                                                                            borderRadius: '50%',
+                                                                            display: 'flex',
+                                                                            justifyContent: 'center',
+                                                                            alignItems: 'center',
+                                                                            background: bgColor,
+                                                                            border: `2px solid ${scoreColor}`,
+                                                                            color: scoreColor,
+                                                                            fontWeight: 'bold',
+                                                                            fontSize: '16px'
+                                                                        }}>
+                                                                            {scaledScore.toFixed(1)}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                            headStyle={{
+                                                                background: bgColor,
+                                                                borderBottom: `1px solid ${borderColor}`
+                                                            }}
+                                                            bodyStyle={{
+                                                                padding: '20px',
+                                                                background: 'white'
+                                                            }}
+                                                        >
+                                                            <div>
+                                                                {/* Format the justification text to highlight citations */}
+                                                                {formatTextWithCitations(item.Justification, index)}
+                                                            </div>
+                                                        </Card>
+                                                    );
+                                                })}
+                                            </div>
+
+                                        {/* Character Network Visualization */}
+                                        <div className="visualization-section">
+                                            <Title level={4}>
+                                                <UserOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                                                Character Network
+                                            </Title>
+                                            <Card className="network-card" style={{ marginBottom: '30px' }}>
+                                                <div className="character-network">
+                                                    {mainCharacters.map((character, index) => {
+                                                        const charData = characterMap[character];
+                                                        if (!charData) return null;
+                                                        
+                                                        return (
+                                                            <div key={index} className="character-node">
+                                                                <Avatar size={64} icon={<UserOutlined />} style={{
+                                                                    backgroundColor: `hsl(${index * 40}, 70%, 50%)`
+                                                                }} />
+                                                                <div className="character-info">
+                                                                    <h4>{character}</h4>
+                                                                    <div className="character-stats">
+                                                                        <Tag color="blue">Appearances: {charData.appearances}</Tag>
+                                                                        {charData.traits.map((trait, i) => (
+                                                                            <Tag key={i} color="cyan">{trait}</Tag>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="character-relationships">
+                                                                        {Object.entries(charData.relationships).map(([relatedChar, dynamics], i) => (
+                                                                            <div key={i} className="relationship-line">
+                                                                                <small>{relatedChar}: {handleCharacterRelationship(dynamics)}</small>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </Card>
+                                        </div>
+
+                                        {/* Timeline Progression */}
+                                        <div className="visualization-section">
+                                            <Title level={4}>
+                                                <FieldTimeOutlined style={{ marginRight: 8, color: '#722ed1' }} />
+                                                Story Timeline
+                                            </Title>
+                                            <Card className="timeline-card" style={{ marginBottom: '30px' }}>
+                                                <Timeline 
+                                                    mode="alternate"
+                                                    items={plotTimeline.map((event, index) => ({
+                                                        key: index,
+                                                        color: index % 2 === 0 ? '#722ed1' : '#1890ff',
+                                                        dot: index % 2 === 0 ? <FieldTimeOutlined /> : <GlobalOutlined />,
+                                                        children: (
+                                                            <Card size="small" className="timeline-event">
+                                                                <h4>{event.chapter}</h4>
+                                                                <p>{event.events.join(', ')}</p>
+                                                                <div className="event-details">
+                                                                    <Tag color="purple">Location: {event.location}</Tag>
+                                                                    {event.characters.map((char, i) => (
+                                                                        <Tag key={i} color="blue">{char}</Tag>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="event-significance">
+                                                                    <small>{event.significance}</small>
+                                                                </div>
+                                                            </Card>
+                                                        )
+                                                    }))}
+                                                />
+                                            </Card>
+                                        </div>
+
+                                        {/* World Building Elements */}
+                                        <div className="visualization-section">
+                                            <Title level={4}>
+                                                <GlobalOutlined style={{ marginRight: 8, color: '#52c41a' }} />
+                                                World Building Elements
+                                            </Title>
+                                            <Card className="world-building-card" style={{ marginBottom: '30px' }}>
+                                                <Row gutter={[16, 16]}>
+                                                    {Object.entries(worldBuildingElements).map(([category, elements], index) => (
+                                                        <Col key={index} xs={24} sm={12} md={8}>
+                                                            <Card 
+                                                                title={category.charAt(0).toUpperCase() + category.slice(1)}
+                                                                size="small"
+                                                                className="element-card"
+                                                            >
+                                                                {Array.isArray(elements) ? (
+                                                                    <ul className="element-list">
+                                                                        {elements.map((element, i) => (
+                                                                            <li key={i}>
+                                                                                <Tag color="green">{element}</Tag>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                ) : (
+                                                                    Object.entries(elements).map(([key, value], i) => (
+                                                                        <div key={i} className="location-item">
+                                                                            <h4>{key}</h4>
+                                                                            <ul>
+                                                                                {Array.isArray(value) && value.map((detail, j) => (
+                                                                                    <li key={j}>{detail}</li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </div>
+                                                                    ))
+                                                                )}
+                                                            </Card>
+                                                        </Col>
+                                                    ))}
+                                                </Row>
+                                            </Card>
+                                        </div>
+
+                                        {/* Plot Arc Analysis - ENHANCED VERSION */}
+                                        <div className="visualization-section">
+                                            <Title level={4} className="section-heading">
+                                                <BookOutlined style={{ marginRight: 8, color: '#fa8c16' }} />
+                                                Plot Arc Analysis
+                                            </Title>
+                                            <Card 
+                                                className="plot-arc-card" 
+                                                style={{ 
+                                                    marginBottom: '30px', 
+                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                                    background: 'linear-gradient(to right bottom, rgba(250, 140, 22, 0.03), white)'
+                                                }}
+                                            >
+                                                <div style={{ marginBottom: '20px', fontSize: '15px', lineHeight: '1.6', color: '#555' }}>
+                                                    This analysis breaks down the structural narrative elements of your book, evaluating the effectiveness of various plot arcs.
+                                                </div>
+                                                <div className="plot-arcs">
+                                                    {results.narrativeContext?.plotArcs?.map((arc, index) => (
+                                                        <div 
+                                                            key={index} 
+                                                            className="plot-arc"
+                                                            style={{
+                                                                padding: '20px',
+                                                                borderRadius: '10px',
+                                                                background: 'white',
+                                                                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.08)',
+                                                                border: '1px solid rgba(250, 140, 22, 0.1)'
+                                                            }}
+                                                        >
+                                                            <div style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                marginBottom: '15px' 
+                                                            }}>
+                                                                <div style={{ 
+                                                                    width: '36px', 
+                                                                    height: '36px', 
+                                                                    borderRadius: '50%', 
+                                                                    background: 'rgba(250, 140, 22, 0.1)', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    justifyContent: 'center', 
+                                                                    marginRight: '10px' 
+                                                                }}>
+                                                                    {index === 0 ? <BookOutlined style={{ color: '#fa8c16' }} /> :
+                                                                     index === 1 ? <UserOutlined style={{ color: '#fa8c16' }} /> :
+                                                                     <SwapOutlined style={{ color: '#fa8c16' }} />}
+                                                                </div>
+                                                                <h4 style={{ margin: 0, color: '#fa8c16', fontWeight: 'bold' }}>
+                                                                    {arc.type}
+                                                                </h4>
+                                                            </div>
+                                                            
+                                                            <div style={{ marginBottom: '15px' }}>
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    justifyContent: 'space-between', 
+                                                                    alignItems: 'center', 
+                                                                    marginBottom: '5px' 
+                                                                }}>
+                                                                    <span style={{ fontSize: '14px', color: '#666' }}>Effectiveness:</span>
+                                                                    <span style={{ 
+                                                                        fontWeight: 'bold', 
+                                                                        color: 
+                                                                            arc.effectiveness >= 4 ? '#52c41a' : 
+                                                                            arc.effectiveness >= 3 ? '#fa8c16' : 
+                                                                            '#f5222d' 
+                                                                    }}>
+                                                                        {arc.effectiveness}/5
+                                                                    </span>
+                                                                </div>
+                                                                <Progress 
+                                                                    percent={arc.effectiveness * 20} 
+                                                                    strokeColor={{
+                                                                        '0%': '#fa8c16',
+                                                                        '100%': '#722ed1'
+                                                                    }}
+                                                                    showInfo={false}
+                                                                />
+                                                            </div>
+                                                            
+                                                            <div style={{ 
+                                                                padding: '12px',
+                                                                backgroundColor: 'rgba(250, 140, 22, 0.03)',
+                                                                borderRadius: '8px',
+                                                                borderLeft: '3px solid #fa8c16'
+                                                            }}>
+                                                                <p style={{ 
+                                                                    margin: 0,
+                                                                    lineHeight: '1.6', 
+                                                                    fontSize: '14px',
+                                                                    color: '#555'
+                                                                }}>
+                                                                    {arc.analysis}
+                                                                </p>
+                                                            </div>
+                                                            
+                                                            <div style={{ 
+                                                                marginTop: '15px', 
+                                                                display: 'flex', 
+                                                                justifyContent: 'space-between' 
+                                                            }}>
+                                                                <Tag color="#fa8c16">
+                                                                    {index === 0 ? 'Primary' : index === 1 ? 'Character-Driven' : 'Supporting'}
+                                                                </Tag>
+                                                                <div style={{ 
+                                                                    fontSize: '13px', 
+                                                                    color: '#999', 
+                                                                    fontStyle: 'italic' 
+                                                                }}>
+                                                                    {arc.effectiveness >= 4 
+                                                                        ? 'Well executed' 
+                                                                        : arc.effectiveness === 3 
+                                                                        ? 'Adequate development' 
+                                                                        : 'Needs development'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Card>
+                                        </div>
+
+                                        {/* Thematic Development - ENHANCED VERSION */}
+                                        <div className="visualization-section">
+                                            <Title level={4} className="section-heading">
+                                                <BookOutlined style={{ marginRight: 8, color: '#eb2f96' }} />
+                                                Thematic Development
+                                            </Title>
+                                            <Card 
+                                                className="themes-card" 
+                                                style={{ 
+                                                    marginBottom: '30px', 
+                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                                                    background: 'linear-gradient(to right bottom, rgba(235, 47, 150, 0.03), white)'
+                                                }}
+                                            >
+                                                <div style={{ marginBottom: '20px', fontSize: '15px', lineHeight: '1.6', color: '#555' }}>
+                                                    Analysis of the central themes in your book and how effectively they are developed throughout the narrative.
+                                                </div>
+                                                <Row gutter={[20, 20]}>
+                                                    {results.narrativeContext?.themes?.map((theme, index) => (
+                                                        <Col xs={24} md={12} lg={8} key={index}>
+                                                            <Card 
+                                                                className="theme-card" 
+                                                                style={{ 
+                                                                    height: '100%',
+                                                                    borderRadius: '10px',
+                                                                    borderLeft: '3px solid #eb2f96',
+                                                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                                                    transition: 'all 0.3s ease'
+                                                                }}
+                                                                bodyStyle={{
+                                                                    padding: '20px',
+                                                                    height: '100%',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column'
+                                                                }}
+                                                                hoverable
+                                                            >
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    marginBottom: '15px' 
+                                                                }}>
+                                                                    <div style={{ 
+                                                                        width: '36px', 
+                                                                        height: '36px', 
+                                                                        borderRadius: '50%', 
+                                                                        background: 'rgba(235, 47, 150, 0.1)', 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center', 
+                                                                        justifyContent: 'center',
+                                                                        marginRight: '10px'
+                                                                    }}>
+                                                                        <span style={{ 
+                                                                            color: '#eb2f96', 
+                                                                            fontWeight: 'bold',
+                                                                            fontSize: '18px'
+                                                                        }}>{index + 1}</span>
+                                                                    </div>
+                                                                    <h4 style={{ 
+                                                                        margin: 0, 
+                                                                        color: '#eb2f96', 
+                                                                        fontWeight: 'bold',
+                                                                        fontSize: '16px'
+                                                                    }}>
+                                                                        {theme.name}
+                                                                    </h4>
+                                                                </div>
+                                                                
+                                                                <div style={{ marginBottom: '15px' }}>
+                                                                    <div style={{ 
+                                                                        display: 'flex', 
+                                                                        justifyContent: 'space-between', 
+                                                                        alignItems: 'center',
+                                                                        marginBottom: '5px'
+                                                                    }}>
+                                                                        <span style={{ fontSize: '14px', color: '#666' }}>Strength:</span>
+                                                                        <Tag color="#eb2f96">{theme.strength}/5</Tag>
+                                                                    </div>
+                                                                    <Progress 
+                                                                        percent={theme.strength * 20}
+                                                                        strokeColor={{
+                                                                            '0%': '#eb2f96',
+                                                                            '100%': '#722ed1'
+                                                                        }}
+                                                                        showInfo={false}
+                                                                        size="small"
+                                                                    />
+                                                                </div>
+                                                                
+                                                                <div style={{
+                                                                    padding: '12px',
+                                                                    backgroundColor: 'rgba(235, 47, 150, 0.03)',
+                                                                    borderRadius: '8px',
+                                                                    marginBottom: '15px',
+                                                                    flex: 1
+                                                                }}>
+                                                                    <p style={{ 
+                                                                        margin: 0,
+                                                                        fontSize: '14px',
+                                                                        lineHeight: '1.6',
+                                                                        color: '#555'
+                                                                    }}>
+                                                                        {theme.development}
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                                {/* Theme occurrence indicators */}
+                                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                                    <div 
+                                                                        style={{ 
+                                                                            width: '10px', 
+                                                                            height: '10px', 
+                                                                            borderRadius: '50%', 
+                                                                            background: '#eb2f96',
+                                                                            margin: '0 5px'
+                                                                        }}
+                                                                        title="Beginning"
+                                                                    ></div>
+                                                                    <div 
+                                                                        style={{ 
+                                                                            width: '10px', 
+                                                                            height: '10px', 
+                                                                            borderRadius: '50%',
+                                                                            background: theme.strength >= 3 ? '#eb2f96' : 'rgba(235, 47, 150, 0.3)',
+                                                                            margin: '0 5px'
+                                                                        }}
+                                                                        title="Middle"
+                                                                    ></div>
+                                                                    <div 
+                                                                        style={{ 
+                                                                            width: '10px', 
+                                                                            height: '10px', 
+                                                                            borderRadius: '50%', 
+                                                                            background: theme.strength >= 4 ? '#eb2f96' : 'rgba(235, 47, 150, 0.3)',
+                                                                            margin: '0 5px'
+                                                                        }}
+                                                                        title="End"
+                                                                    ></div>
+                                                                </div>
+                                                            </Card>
+                                                        </Col>
+                                                    ))}
+                                                </Row>
+                                            </Card>
+                                        </div>
+
+                                        <Button 
+                                            type="primary"
+                                            icon={<FileTextOutlined />}
+                                            onClick={generateSimpleDocx}
+                                            loading={capturingPdf}
+                                            className="pdf-button"
+                                            style={{ 
+                                                marginTop: '15px',
+                                                background: '#52c41a', 
+                                                borderColor: '#52c41a',
+                                                padding: '8px 16px',
+                                                height: 'auto'
+                                            }}
+                                        >
+                                            Generate Word Document
+                                        </Button>
+                                    </div>
+                                </Card>
+                            </Col>
+                        </Row>
+                    </>
+                )}
+            </Content>
+            
+            <Footer style={{ 
+                textAlign: 'center', 
+                background: '#ffffff',
+                padding: '10px',
+                color: '#000000',
+                borderTop: '1px solid #f0f0f0'
+            }}>
+                eBook AI Analyzer ©{new Date().getFullYear()} - Powered by Next.js and OpenAI
+            </Footer>
+
+            {/* Analysis Overlay */}
+            {showAnalysisOverlay && (
+                <div className="analyzerOverlay">
+                    <style>{animationStyles}</style>
+                    
+                    {/* Add emergency restart button at the top of the overlay */}
+                    {!vercelDeployment && progress > 10 && progress < 95 && (
+                        <Button 
+                            type="primary" 
+                            danger 
+                            onClick={restartInEmergencyMode}
+                            style={{
+                                position: 'absolute',
+                                top: '20px',
+                                right: '20px',
+                                zIndex: 1010
+                            }}
+                        >
+                            Restart in Emergency Mode
+                        </Button>
                     )}
+                    
+                    <div style={{ maxWidth: '600px', textAlign: 'center' }}>
+                        <div className="loader-container">
+                            {progress < 100 ? (
+                                vercelDeployment ? (
+                                    <div className="brain-container">
+                                        <div className="brain">🧠</div>
+                                        <div className="ai-message">AI Analyzing Book</div>
+                                        <div className="thinking-dots">
+                                            <div className="dot"></div>
+                                            <div className="dot"></div>
+                                            <div className="dot"></div>
+                                        </div>
+                                        {/* Add this activity ticker */}
+                                        <div className="activity-ticker" style={{ 
+                                          fontSize: '11px', 
+                                          color: '#666',
+                                          marginTop: '15px',
+                                          height: '16px',
+                                          overflow: 'hidden'
+                                        }}>
+                                          {['Reading text...', 'Processing chapters...', 'Analyzing characters...', 'Evaluating plot...', 'Finding themes...'][Math.floor(Date.now()/1000) % 5]}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="book-loading">
+                                        <div className="book">
+                                            <div className="page"></div>
+                                            <div className="page"></div>
+                                            <div className="page"></div>
+                                        </div>
+                                    </div>
+                                )
+                            ) : (
+                                <div className="success-animation">
+                                    <div className="checkmark">
+                                        <div className="check"></div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="processingIndicator">
+                            {vercelDeployment ? (
+                                <div className="serverless-processing" style={{ 
+                                    width: '100%', 
+                                    maxWidth: '500px',
+                                    margin: '0 auto',
+                                    padding: '20px'
+                                }}>
+                                    {/* Show progress bar in serverless mode too */}
+                                    <div className="progressBar" style={{ marginBottom: '15px' }}>
+                                        <div 
+                                            className={`progressFill ${progress >= 90 ? 'pulsing' : ''}`}
+                                            style={{
+                                                width: `${progress}%`,
+                                                backgroundColor: progress === 100 ? '#52c41a' : '#1890ff',
+                                                transition: 'width 0.8s ease-in-out',
+                                                height: '12px', // Make it taller
+                                                borderRadius: '6px',
+                                                boxShadow: '0 0 5px rgba(24, 144, 255, 0.5)', // Add glow effect
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}
+                                        >
+                                            {/* Add animated stripe effect */}
+                                            <div 
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    right: 0,
+                                                    bottom: 0,
+                                                    background: 'linear-gradient(45deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent)',
+                                                    backgroundSize: '20px 20px',
+                                                    animation: 'move-stripes 1s linear infinite',
+                                                    zIndex: 1
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="progress-status">
+                                      <span>{analysisStage}</span>
+                                      {/* Add time remaining display with progress */}
+                                      <div style={{ 
+                                        fontSize: "14px", 
+                                        color: "#666", 
+                                        marginTop: "8px",
+                                        textAlign: "center" 
+                                      }}>
+                                        <div style={{ 
+                                          display: "flex", 
+                                          flexDirection: "column",
+                                          alignItems: "center", 
+                                          justifyContent: "center",
+                                          gap: "5px" 
+                                        }}>
+                                          {/* Progress percentage above clock */}
+                                          <div style={{
+                                            fontSize: "16px",
+                                            fontWeight: "bold",
+                                            color: "#1890ff",
+                                            marginBottom: "2px"
+                                          }}>
+                                            {progress.toFixed(0)}% Complete
+                                          </div>
+                                          
+                                          {/* Circular clock UI */}
+                                          {visualCountdown > 0 ? (
+                                            <div style={{ position: "relative", width: "80px", height: "80px", margin: "0 auto" }}>
+                                              {/* Background circle */}
+                                              <svg width="80" height="80" viewBox="0 0 100 100">
+                                                <circle 
+                                                  cx="50" 
+                                                  cy="50" 
+                                                  r="45" 
+                                                  fill="none" 
+                                                  stroke="#f0f0f0" 
+                                                  strokeWidth="8" 
+                                                />
+                                                {/* Countdown progress ring */}
+                                                <circle 
+                                                  cx="50" 
+                                                  cy="50" 
+                                                  r="45" 
+                                                  fill="none" 
+                                                  stroke="#1890ff" 
+                                                  strokeWidth="8" 
+                                                  strokeLinecap="round"
+                                                  strokeDasharray="283"
+                                                  strokeDashoffset={283 * (1 - visualCountdown / (15 * 60))}
+                                                  transform="rotate(-90 50 50)"
+                                                  style={{
+                                                    transition: "stroke-dashoffset 1s linear, stroke 0.5s ease",
+                                                    stroke: visualCountdown < 60 ? "#f5222d" : 
+                                                           visualCountdown < 3 * 60 ? "#faad14" : "#1890ff"
+                                                  }}
+                                                />
+                                              </svg>
+                                              {/* Clock hands */}
+                                              <div style={{ 
+                                                position: "absolute", 
+                                                top: 0, 
+                                                left: 0, 
+                                                width: "100%", 
+                                                height: "100%", 
+                                                display: "flex", 
+                                                alignItems: "center", 
+                                                justifyContent: "center", 
+                                                flexDirection: "column" 
+                                              }}>
+                                                <span style={{ 
+                                                  fontSize: "18px", 
+                                                  fontWeight: "bold", 
+                                                  fontFamily: "monospace",
+                                                  color: visualCountdown < 60 ? "#f5222d" : 
+                                                        visualCountdown < 3 * 60 ? "#faad14" : "#1890ff"
+                                                }}>
+                                                  {formatTimeRemaining(visualCountdown)}
+                                                </span>
+                                                <span style={{ fontSize: "10px", marginTop: "2px" }}>remaining</span>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            'Finalizing results...'
+                                          )}
+                                          
+                                          {/* Force check button */}
+                                          <Button 
+                                            type="primary"
+                                            size="small"
+                                            onClick={() => checkForResults(true)}
+                                            style={{ 
+                                              marginTop: "15px", 
+                                              background: "#1890ff",
+                                              fontWeight: "500"
+                                            }}
+                                          >
+                                            Force Check Now
+                                          </Button>
+                                          <div style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>
+                                            {visualCountdown < 60 ? "Use this if the timer reached zero" : "Skip waiting and check now"}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                
+
+                                    {/* Add emergency restart button */}
+                                    {progress > 20 && progress < 95 && (
+                                        <Button 
+                                            type="primary" 
+                                            danger 
+                                            onClick={restartInEmergencyMode}
+                                            style={{ marginTop: '15px' }}
+                                        >
+                                            Restart in Emergency Mode
+                                        </Button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    {/* Non-vercelDeployment content goes here */}
+                                </div>
+                            )}
+                            
+                            <div style={{
+                                background: '#ffffff',
+                                padding: '15px',
+                                borderRadius: '8px',
+                                marginTop: '20px',
+                                textAlign: 'left',
+                                maxHeight: '150px',
+                                overflowY: 'auto',
+                                display: showLoader ? 'block' : 'none',
+                                border: '1px solid #f0f0f0'
+                            }}>
+                                <div style={{ color: '#000000', opacity: 0.9, fontSize: '14px' }}>
+                                    {processingLogs.map((log, index) => (
+                                        <div key={index} style={{ marginBottom: '5px' }}>
+                                            <span style={{ color: progress === 100 ? '#52c41a' : '#1890ff' }}>{`>`}</span> {log}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <Typography.Title level={4} style={{ 
+                        color: progress === 100 ? '#52c41a' : '#000000', 
+                        marginTop: '20px',
+                        transition: 'color 0.5s ease-in-out'
+                    }}>
+                        {progress === 100 ? 'Analysis Complete!' : vercelDeployment ? 'Processing in the Cloud' : jobId ? 'Analyzing Your Book' : 'Preparing Analysis'}
+                    </Typography.Title>
                 </div>
-            </Layout>
-        </ConfigProvider>
+            )}
+            </div>
+        </Layout>
+    </ConfigProvider>
     </AntApp>
     );
 }
