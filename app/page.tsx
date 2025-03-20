@@ -1157,38 +1157,25 @@ export default function Home() {
 
     // Replace handleFileChange with this new version
     const handleFileChange = (info: any) => {
-        const newFiles = info?.fileList?.map((fileInfo: any) => {
+        // Handle only ONE file - the newest one
+        if (info?.fileList?.length > 0) {
+            const fileInfo = info.fileList[info.fileList.length - 1];
             const file = fileInfo.originFileObj;
             const fileType = file.name.toLowerCase().split('.').pop();
             
             if (fileType !== 'pdf' && fileType !== 'docx') {
                 message.error(`${file.name} is not a PDF or DOCX file`);
-                return null;
+                return;
             }
             
-            return {
+            // Replace any existing file with the new one
+            setFiles([{
                 file,
                 progress: 0,
                 status: 'pending' as const
-            };
-        }).filter(Boolean);
-
-        if (newFiles) {
-            setFiles(prev => {
-                // Check for duplicates by file name to prevent the same file being added multiple times
-                const existingFileNames = new Set(prev.map(f => f.file.name));
-                const uniqueNewFiles = newFiles.filter(newFile => !existingFileNames.has(newFile.file.name));
-                
-                // If all new files are duplicates, show a message
-                if (uniqueNewFiles.length === 0 && newFiles.length > 0) {
-                    message.info("These files are already in the queue");
-                    return prev;
-                }
-                
-                const combined = [...prev, ...uniqueNewFiles];
-                // Keep only the last 10 files if more are added
-                return combined.slice(-10);
-            });
+            }]);
+        } else {
+            setFiles([]);
         }
     };
 
@@ -1226,7 +1213,7 @@ export default function Home() {
         
         // Auto-select the first file by default
         setSelectedFileIndex(0);
-        console.log("Auto-selected first file for analysis");
+        console.log("Auto-selected file for analysis");
         
         // First reset all progress states to 0
         setProgress(0);
@@ -2961,8 +2948,8 @@ export default function Home() {
                                 >
                                     <Upload
                                         accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                        multiple
-                                        maxCount={10}
+                                        multiple={false}
+                                        maxCount={1}
                                         showUploadList={{
                                             showRemoveIcon: true,
                                             removeIcon: <DeleteOutlined style={{ color: '#ff4d4f' }} />,
@@ -2983,14 +2970,14 @@ export default function Home() {
                                             ghost
                                             className={!files.length ? "pulse" : ""}
                                             style={{ 
-                                                width: '100%', 
-                                                height: '50px',
-                                                background: '#ffffff',
+                                                height: '44px',
+                                                borderRadius: '8px',
+                                                fontWeight: 500,
                                                 borderColor: '#1890ff',
-                                                color: '#1890ff'
+                                                marginRight: '10px'
                                             }}
                                         >
-                                            Click to Upload Multiple PDFs (Max 10)
+                                            Select eBook File (PDF/DOCX)
                                         </Button>
                                     </Upload>
                                     
@@ -3078,36 +3065,16 @@ export default function Home() {
                             <Row justify="center" style={{ marginTop: '20px' }}>
                                 <Col xs={24} sm={22} md={20} lg={18} xl={16}>
                                     <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: '20px' }}>
-                                        <Select
-                                            style={{ width: 300 }}
-                                            placeholder="Select a file to view"
-                                            onChange={(value) => setSelectedFileIndex(value)}
-                                            value={selectedFileIndex}
-                                        >
-                                            {files.map((file, index) => (
-                                                <Select.Option key={index} value={index}>
-                                                    {file.file.name}
-                                                </Select.Option>
-                                            ))}
-                                        </Select>
-                                        
-                                        {files.length > 1 && (
-                                            <Button
-                                                type="primary"
-                                                icon={<SwapOutlined />}
-                                                onClick={() => setShowComparison(!showComparison)}
-                                            >
-                                                {showComparison ? 'Hide Comparison' : 'Compare Files'}
-                                            </Button>
-                                        )}
+                                        {/* Display file name instead of dropdown */}
+                                        <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+                                            Analyzing: {files[0].file.name}
+                                        </div>
                                     </Space>
-                                    
-                                    {showComparison && renderComparison()}
                                 </Col>
                             </Row>
                         )}
 
-                        {selectedFileIndex !== null && files[selectedFileIndex]?.analysis && (
+                        {files.length > 0 && files[0]?.analysis && (
                             <>
                                 {/* Generate Report Buttons */}
                                 <Row justify="center" style={{ marginTop: '20px' }}>
@@ -3638,7 +3605,7 @@ export default function Home() {
                                         <Button
                                             type="primary"
                                             icon={<DownloadOutlined />}
-                                            onClick={() => generateIndividualReport(selectedFileIndex)}
+                                            onClick={() => generateIndividualReport(0)}
                                         >
                                             Download Report
                                         </Button>
