@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Layout, Upload, Button, Table, Spin, Alert, Card, Row, Col, Typography, Divider, Progress, message, Modal, ConfigProvider, theme, Space, Select } from "antd";
-import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined, UserOutlined, FieldTimeOutlined, GlobalOutlined, DeleteOutlined, SwapOutlined, ClockCircleOutlined } from "@ant-design/icons";
+import { UploadOutlined, DownloadOutlined, BookOutlined, FileTextOutlined, EditOutlined, CommentOutlined, FileImageOutlined, FilePdfOutlined, UserOutlined, FieldTimeOutlined, GlobalOutlined, DeleteOutlined, SwapOutlined, ClockCircleOutlined, BarChartOutlined } from "@ant-design/icons";
 import domtoimage from 'dom-to-image';
 import jsPDF from 'jspdf';
 import './styles.css';
@@ -198,6 +198,8 @@ export default function Home() {
     const [pdfSuccess, setPdfSuccess] = useState(false);
     const resultCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const serverlessInitializedRef = useRef<boolean>(false); // Track initialization
+    const progressCheckRunningRef = useRef<boolean>(false); // Track if a progress check is already running
 
     // Analysis result states
     const [results, setResults] = useState<AnalysisResults>({
@@ -229,6 +231,9 @@ export default function Home() {
         location: string;
         significance: string;
     }>>([]);
+    
+    const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
+    const [showComparison, setShowComparison] = useState<boolean>(false);
 
     // World building states
     const [worldBuildingElements, setWorldBuildingElements] = useState<{
@@ -259,11 +264,6 @@ export default function Home() {
             0% { transform: scale(0); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
         }
-
-        @keyframes checkmark {
-            0% { height: 0; width: 0; opacity: 0; }
-            100% { height: 40px; width: 20px; opacity: 1; }
-        }
         
         @keyframes thinking {
             0%, 100% { transform: scale(1); }
@@ -276,11 +276,9 @@ export default function Home() {
         }
         
         @keyframes float {
-            0% { transform: translateY(0) rotate(0deg); }
-            25% { transform: translateY(-5px) rotate(2deg); }
-            50% { transform: translateY(0) rotate(0deg); }
-            75% { transform: translateY(5px) rotate(-2deg); }
-            100% { transform: translateY(0) rotate(0deg); }
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
         }
         
         @keyframes rotateBook {
@@ -711,6 +709,21 @@ export default function Home() {
             margin-bottom: 20px;
             animation: float 3s ease-in-out infinite, pulse 2s ease-in-out infinite;
         }
+
+        @keyframes move-stripes {
+          0% {
+            background-position: 0 0;
+          }
+          100% {
+            background-position: 20px 0;
+          }
+        }
+        
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px rgba(24, 144, 255, 0.5); }
+            50% { box-shadow: 0 0 15px rgba(24, 144, 255, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(24, 144, 255, 0.5); }
+        }
     `;
     
     // Refs for capturing PDF content
@@ -790,45 +803,119 @@ export default function Home() {
     };
 
     // Helper function to update progress stage based on progress percentage
-    const updateProgressStage = (progress: number) => {
-        if (progress < 20) {
-            setAnalysisStage("Extracting text from document...");
-        } else if (progress < 40) {
-            setAnalysisStage("Analyzing document structure...");
-        } else if (progress < 60) {
-            setAnalysisStage("Processing content and relationships...");
-        } else if (progress < 75) {
-            setAnalysisStage("Generating insights...");
-        } else if (progress < 85) {
-            setAnalysisStage("Evaluating narrative elements...");
+    const updateProgressStage = (progress: number | string) => {
+        if (typeof progress === 'string') {
+            setAnalysisStage(progress);
         } else {
-            setAnalysisStage("Finalizing analysis...");
+            if (progress < 20) {
+                setAnalysisStage("Extracting text from document...");
+            } else if (progress < 40) {
+                setAnalysisStage("Analyzing document structure...");
+            } else if (progress < 60) {
+                setAnalysisStage("Processing content and relationships...");
+            } else if (progress < 75) {
+                setAnalysisStage("Generating insights...");
+            } else if (progress < 85) {
+                setAnalysisStage("Evaluating narrative elements...");
+            } else {
+                setAnalysisStage("Finalizing analysis...");
+            }
         }
     };
     
     // Add check for final result button to serverless display
-    const checkForResults = () => {
-        message.loading("Checking for results...", 3);
-        checkFinalResult(false);
-    };
-    
-    // Check for final result directly when user clicks the button
-    const checkFinalResult = async (showError: boolean = true) => {
+    const checkForResults = async (showError: boolean = true) => {
         if (!jobId) {
             message.info("No analysis in progress", 3);
+            return;
+        }
+        
+        // First check if the job is already marked as completed
+        if (isJobCompleted(jobId)) {
+            console.log(`Job ${jobId} is already marked as completed - skipping check`);
+            message.info("Analysis is already complete", 3);
+            return;
+        }
+        
+        // If user manually checks and progress is high (≥95%), just complete it immediately
+        if (progress >= 95) {
+            console.log("Progress is already at 95%+, completing analysis immediately");
+            
+            // Mark this job as completed in session storage
+            markJobCompleted(jobId);
+            
+            // Clean up any existing progress check intervals
+            if (resultCheckIntervalRef.current) {
+                clearInterval(resultCheckIntervalRef.current);
+                resultCheckIntervalRef.current = null;
+            }
+            
+            if (timeUpdateIntervalRef.current) {
+                clearInterval(timeUpdateIntervalRef.current);
+                timeUpdateIntervalRef.current = null;
+            }
+            
+            // Reset progress tracking flag
+            progressCheckRunningRef.current = false;
+            
+            // Update UI to show completion
+            setLoading(false);
+            setProgress(100);
+            setAnalysisStage("Analysis complete!");
+            setShowAnalysisOverlay(false);
+            
+            message.success("Analysis completed!", 5);
+            return;
+        }
+        
+        // If progress is low (<90%) and a check is already running, inform user to wait
+        if (progress < 90 && progressCheckRunningRef.current) {
+            message.info("Analysis still in progress. Please wait until it's closer to completion.", 3);
             return;
         }
         
         try {
             message.loading("Checking for results...", 3);
             
-            const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`);
+            // Use a controller to set timeout - avoid hanging requests
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`, {
+                signal: controller.signal,
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            clearTimeout(timeoutId);
             
             if (response.ok) {
                 const data = await response.json();
                 
                 if (data.analysis) {
                     // Success! We have the final data
+                    console.log("Final results obtained, cleaning up progress tracking");
+                    
+                    // Mark this job as completed in session storage
+                    markJobCompleted(jobId);
+                    
+                    // Clean up any existing progress check intervals
+                    if (resultCheckIntervalRef.current) {
+                        clearInterval(resultCheckIntervalRef.current);
+                        resultCheckIntervalRef.current = null;
+                    }
+                    
+                    if (timeUpdateIntervalRef.current) {
+                        clearInterval(timeUpdateIntervalRef.current);
+                        timeUpdateIntervalRef.current = null;
+                    }
+                    
+                    // Reset progress tracking flag
+                    progressCheckRunningRef.current = false;
+                    
                     setLoading(false);
                     setProgress(100);
                     setAnalysisStage("Analysis complete!");
@@ -841,157 +928,231 @@ export default function Home() {
                     setConstructiveCriticism(data.constructiveCriticism || "");
                     
                     message.success("Analysis completed successfully!", 5);
+                } else if (data.message && data.message.includes("being analyzed")) {
+                    // Specific handling for "still being analyzed" messages
+                    message.info("Your document is still being analyzed. Please check again when progress is complete.", 5);
+                    
+                    // Only update progress if no progress check is running and progress is low
+                    if (!progressCheckRunningRef.current) {
+                        // Start a new progress check if one isn't already running
+                        startSimpleProgressCheck(jobId);
+                    } else {
+                        // Don't modify the progress directly, let the running check handle it
+                        console.log("Progress check already running, not modifying progress");
+                    }
                 } else {
-                    message.info("Your document is still being analyzed. Please try again in a minute.");
+                    // Generic message if we can't determine the exact status
+                    message.info("Processing is still in progress. Please try again soon.", 5);
                 }
             } else {
                 if (showError) {
-                    message.error("Could not check analysis status. Please try again later.");
+                    const statusCode = response.status;
+                    // Provide more specific error messages based on status code
+                    if (statusCode === 404) {
+                        message.error("Analysis job not found. The job may have expired.", 5);
+                    } else if (statusCode >= 500) {
+                        message.error("Server error occurred. Please try again or restart the analysis.", 5);
+                    } else {
+                        message.error(`Error checking status (${statusCode}). Please try again.`, 5);
+                    }
                 }
             }
         } catch (error) {
             console.error("Error checking final result:", error);
             if (showError) {
-                message.error("Failed to check analysis status. Please try again.");
+                if (error.name === 'AbortError') {
+                    message.error("Request timed out. Server may be busy - try again shortly.", 5);
+                } else {
+                    message.error("Failed to check analysis status. Please try again.", 5);
+                }
             }
         }
     };
     
-    // Improved serverless progress checker with much less API load
-    const startSimpleProgressCheck = () => {
-        // Only start if we have a job ID
-        if (!jobId) {
-            console.log("Cannot start progress check without a job ID");
-            return;
+    // Simplified progress checker with minimal overhead
+    const startSimpleProgressCheck = (explicitJobId?: string) => {
+      // Use the provided job ID or fall back to the state value
+      const effectiveJobId = explicitJobId || jobId;
+      
+      // Only start if we have a job ID
+      if (!effectiveJobId) {
+        console.log("Cannot start progress check without a job ID");
+        return;
+      }
+
+      // First check if job is already completed
+      if (isJobCompleted(effectiveJobId)) {
+        console.log(`Job ${effectiveJobId} is already completed - not starting progress check`);
+        
+        // Instead of starting a progress check, just fetch the results directly
+        fetch(`/api/analyze?finalResult=true&jobId=${effectiveJobId}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        })
+        .then(response => response.ok ? response.json() : null)
+        .then(data => {
+          if (data?.analysis) {
+            console.log("Loading results for already-completed job");
+            
+            // Update UI with results
+            setAnalysis(data.analysis);
+            setSummary(data.summary || "");
+            setPrologue(data.prologue || "");
+            setConstructiveCriticism(data.constructiveCriticism || "");
+            
+            // Make sure UI shows completed state
+            setLoading(false);
+            setProgress(100);
+            setAnalysisStage("Analysis complete!");
+            setShowAnalysisOverlay(false);
+          }
+        })
+        .catch(err => console.error("Error loading completed job data:", err));
+        
+        return;
+      }
+
+      // If a progress check is already running, don't start another one
+      if (progressCheckRunningRef.current) {
+        console.log(`Progress check already running for job ${effectiveJobId}, not starting another one`);
+        return;
+      }
+      
+      // Mark that a check is now running
+      progressCheckRunningRef.current = true;
+      console.log(`Starting new progress check for job ${effectiveJobId} (marked as running)`);
+      
+      // Clean up any existing intervals
+      if (resultCheckIntervalRef.current) {
+        console.log("Clearing existing interval before starting new one");
+        clearInterval(resultCheckIntervalRef.current);
+        resultCheckIntervalRef.current = null;
+      }
+      
+      if (timeUpdateIntervalRef.current) {
+        clearInterval(timeUpdateIntervalRef.current);
+        timeUpdateIntervalRef.current = null;
+      }
+      
+      // Set initial progress value if needed
+      if (progress < 15) {
+        setProgress(15);
+        updateProgressStage("Starting document analysis...");
+      }
+      
+      // Use a single interval for both progress updates and API checks
+      let currentProgress = Math.max(progress, 15);
+      let checkCounter = 0;
+      const startTime = Date.now();
+      const MAX_POLLING_TIME = 15 * 60 * 1000; // 15 minutes
+      let timeAtMaxProgress = 0; // Track how long we've been at max progress
+      
+      
+      const combinedInterval = setInterval(() => {
+        checkCounter++;
+        
+        // Calculate how long we've been running
+        const elapsedTime = Date.now() - startTime;
+        
+        // Handle progress updates
+        if (currentProgress < 95) {
+          // Normal progress increase until we hit 95%
+          currentProgress = Math.min(currentProgress + 0.5, 95);
+          setProgress(currentProgress);
+        } else {
+          // We're at max progress (95%)
+          if (timeAtMaxProgress === 0) {
+            // First time at max progress, record the time
+            timeAtMaxProgress = Date.now();
+          } else {
+            // Check if we've been at max progress for too long (60 seconds)
+            const timeAtMax = Date.now() - timeAtMaxProgress;
+            if (timeAtMax > 60000) {
+              // Been at 95% for over a minute, auto-complete
+              console.log("Been at 95% for too long, auto-completing...");
+              
+              // Clear the interval and mark as complete
+              clearInterval(combinedInterval);
+              progressCheckRunningRef.current = false;
+              
+              // If we have a job ID, mark it as completed
+              if (effectiveJobId) {
+                markJobCompleted(effectiveJobId);
+              }
+              
+              // Update UI to show completion
+              setProgress(100);
+              setAnalysisStage("Analysis complete!");
+              setShowAnalysisOverlay(false);
+              
+              message.info("Analysis completed based on progress", 5);
+              return;
+            }
+          }
         }
         
-        // Use artificial progress as fallback
-        let artificialProgress = 10;
-        let checkCounter = 0;
-        let maxRetries = 20; // Limit the number of retries to avoid infinite polling
-        
-        // Clear any existing intervals
-        if (resultCheckIntervalRef.current) {
-            clearInterval(resultCheckIntervalRef.current);
-            resultCheckIntervalRef.current = null;
+        // Update stage based on progress
+        if (currentProgress >= 90) {
+          updateProgressStage("Finalizing analysis... waiting for server response");
+        } else {
+          updateProgressStage(currentProgress);
         }
         
-        if (timeUpdateIntervalRef.current) {
-            clearInterval(timeUpdateIntervalRef.current);
-            timeUpdateIntervalRef.current = null;
+        // Only check the server when we're at 95% progress, and not too frequently
+        const shouldCheckServer = currentProgress >= 95 && (checkCounter % 15 === 0);
+          
+        if (shouldCheckServer) {
+          console.log(`Checking server for results at ${Math.round(currentProgress)}% progress (attempt ${Math.floor(checkCounter/15)})...`);
+          
+          // Check for results
+          fetch(`/api/analyze?finalResult=true&jobId=${effectiveJobId}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+          })
+          .then(response => response.ok ? response.json() : null)
+          .then(data => {
+            if (data?.analysis) {
+              // Success! Got results
+              clearInterval(combinedInterval);
+              
+              // Mark job as completed
+              markJobCompleted(effectiveJobId);
+              console.log(`Marked job ${effectiveJobId} as completed in interval check`);
+              
+              // Reset progress tracking flag
+              progressCheckRunningRef.current = false;
+              
+              // Update UI with complete status
+              setLoading(false);
+              setProgress(100);
+              setAnalysisStage("Analysis complete!");
+              setShowAnalysisOverlay(false);
+              
+              // Update UI with results
+              setAnalysis(data.analysis);
+              setSummary(data.summary || "");
+              setPrologue(data.prologue || "");
+              setConstructiveCriticism(data.constructiveCriticism || "");
+              message.success("Analysis completed successfully!", 5);
+            }
+          })
+          .catch(err => console.error("Error checking progress:", err));
         }
         
-        console.log(`Starting silent progress check for job ${jobId} - will check every 3 minutes`);
-        
-        // Only log the first status message to avoid flooding the console
-        console.log("Serverless mode active - using estimated progress");
-        
-        // Try to get results silently without showing UI errors
-        const silentCheck = async () => {
-            if (!jobId) return null;
-            
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
-                
-                const response = await fetch(`/api/analyze?finalResult=true&jobId=${jobId}`, {
-                    signal: controller.signal
-                }).catch(error => {
-                    console.log("Silent check failed:", error.message || "Network error");
-                    return null;
-                });
-                
-                clearTimeout(timeoutId);
-                
-                if (!response || !response.ok) return null;
-                
-                const data = await response.json();
-                return data;
-            } catch (error) {
-                console.log("Silent check exception:", error);
-                return null;
-            }
-        };
-        
-        // First check immediately
-        silentCheck().then(data => {
-            // ... existing then logic ...
-        });
-        
-        // Set up time update interval first
-        const timeUpdateInterval = setInterval(() => {
-            setEstimatedTimeRemaining(prev => {
-                // Convert to seconds - decrease by 20 seconds every interval
-                const newValue = Math.max(1, prev - 20);
-                console.log(`Time remaining updated: ${formatTimeRemaining(prev)} -> ${formatTimeRemaining(newValue)}`);
-                return newValue;
-            });
-        }, 20000); // Update every 20 seconds
-        
-        // Store the time interval ref so we can clear it later
-        timeUpdateIntervalRef.current = timeUpdateInterval;
-        
-        // Set up progress check interval
-        const progressInterval = setInterval(async () => {
-            checkCounter++;
-            
-            // Check server every 2nd interval or if we're at a critical point 
-            // This means checking every 3 minutes (with 90 sec interval)
-            if (checkCounter % 2 === 0 || artificialProgress > 80) {
-                silentCheck().then(data => {
-                    if (data?.analysis) {
-                        // Success! Got results
-                        clearInterval(progressInterval);
-                        if (timeUpdateIntervalRef.current) {
-                            clearInterval(timeUpdateIntervalRef.current);
-                            timeUpdateIntervalRef.current = null;
-                        }
-                        resultCheckIntervalRef.current = null;
-                        
-                        setLoading(false);
-                        setProgress(100);
-                        setAnalysisStage("Analysis complete!");
-                        setShowAnalysisOverlay(false);
-                        
-                        // Update UI with results
-                        setAnalysis(data.analysis);
-                        setSummary(data.summary || "");
-                        setPrologue(data.prologue || "");
-                        setConstructiveCriticism(data.constructiveCriticism || "");
-                        message.success("Analysis completed successfully!", 5);
-                    } else {
-                        // Still processing, increase progress gradually
-                        artificialProgress = Math.min(artificialProgress + (4 - (0.1 * checkCounter)), 95);
-                        setProgress(artificialProgress);
-                        updateProgressStage(artificialProgress);
-                    }
-                });
-            } else {
-                // Just update progress without API request
-                artificialProgress = Math.min(artificialProgress + 3, 90);
-                setProgress(artificialProgress);
-                updateProgressStage(artificialProgress);
-            }
-            
-            // After max retries, stop checking automatically
-            if (checkCounter >= maxRetries) {
-                console.log(`Reached maximum polling attempts (${maxRetries}). Stopping automatic checks.`);
-                clearInterval(progressInterval);
-                if (timeUpdateIntervalRef.current) {
-                    clearInterval(timeUpdateIntervalRef.current);
-                    timeUpdateIntervalRef.current = null;
-                }
-                resultCheckIntervalRef.current = null;
-                
-                // Set progress to 95% and show message to use manual check
-                setProgress(95);
-                setAnalysisStage("Almost done! Check for results manually.");
-                message.info("Analysis is taking longer than expected. Use the 'Check for Results' button to check manually.", 10);
-            }
-        }, 90000); // 90 seconds (1.5 minutes)
-        
-        // Store the progress interval ref
-        resultCheckIntervalRef.current = progressInterval;
+        // Auto-complete after maximum polling time
+        if (elapsedTime > MAX_POLLING_TIME) {
+          console.log(`Maximum polling time of ${MAX_POLLING_TIME/60000} minutes reached, auto-completing`);
+          clearInterval(combinedInterval);
+          progressCheckRunningRef.current = false;
+          setProgress(100);
+          setAnalysisStage("Analysis complete!");
+          setShowAnalysisOverlay(false);
+          message.info("Analysis completed based on maximum time", 5);
+        }
+      }, 1000); // Update every second for smoother progress
+      
+      // Store the interval reference
+      resultCheckIntervalRef.current = combinedInterval;
     };
 
     // Replace handleFileChange with this new version
@@ -1031,13 +1192,53 @@ export default function Home() {
         }
     };
 
+    // Simplified progress update function to avoid animations that can conflict
+    const scheduleProgressUpdate = (targetProgress: number) => {
+      // Only update if target progress is higher than current
+      if (targetProgress <= progress) {
+        console.log(`Skipping progress update: target (${targetProgress}) <= current (${progress})`);
+        return;
+      }
+      
+      console.log(`Directly setting progress to ${targetProgress}`);
+      setProgress(targetProgress);
+      updateProgressStage(targetProgress);
+    };
+
     // Replace handleUpload with this new version
     const handleUpload = async () => {
         if (files.length === 0) return;
         
+        // Clean up any existing progress check
+        if (resultCheckIntervalRef.current) {
+            clearInterval(resultCheckIntervalRef.current);
+            resultCheckIntervalRef.current = null;
+        }
+        
+        if (timeUpdateIntervalRef.current) {
+            clearInterval(timeUpdateIntervalRef.current);
+            timeUpdateIntervalRef.current = null;
+        }
+        
+        // Reset progress check running flag
+        progressCheckRunningRef.current = false;
+        console.log("Starting new upload - reset progress tracking state");
+        
+        // CRITICAL: First reset all progress-related state IMMEDIATELY
+        setProgress(0);
+        setAnalysisStage("Preparing");
         setUploading(true);
         setShowLoader(true);
         setShowAnalysisOverlay(true);
+        
+        // Use a clean timeout to set initial progress
+        setTimeout(() => {
+            if (!progressCheckRunningRef.current) {
+                console.log("Setting initial progress to 10% after reset");
+                setProgress(10);
+                setAnalysisStage("Starting document analysis...");
+            }
+        }, 300);
         
         try {
             // Reset all states
@@ -1114,6 +1315,17 @@ export default function Home() {
                         throw new Error(data.error);
                     }
                     
+                    // Add quota warning handling here
+                    if (data.quotaWarning) {
+                        // Show warning but continue processing
+                        message.warning(data.quotaWarning, 15);
+                        setProcessingLogs(prev => [
+                            ...prev, 
+                            `WARNING: ${data.quotaWarning}`,
+                            'Analysis will continue with limited accuracy...'
+                        ]);
+                    }
+                    
                     if (data.jobId) {
                         // First set the job ID
                         setJobId(data.jobId);
@@ -1134,17 +1346,10 @@ export default function Home() {
                         // Use a more reliable approach to ensure jobId is set before starting progress check
                         console.log(`Job ID received: ${data.jobId}, setting up progress check`);
                         
-                        // Wait for jobId to be set in state before starting progress check
-                        setTimeout(() => {
-                            // Double check that jobId exists before starting progress check
-                            if (data.jobId) {
-                                console.log(`Starting progress check for job ${data.jobId}`);
-                                startSimpleProgressCheck();
-                            } else {
-                                console.error("JobId still not available after upload");
-                                setProgress(10); // Set some initial progress to show activity
-                            }
-                        }, 1000); // Give enough time for state to update
+                        // Instead of waiting for state update, pass the jobId directly
+                        // Call startSimpleProgressCheck immediately with the received jobId
+                        console.log(`Starting progress check for job ${data.jobId}`);
+                        startSimpleProgressCheck(data.jobId);
                     } else {
                         throw new Error('No job ID received from server');
                     }
@@ -1278,6 +1483,9 @@ export default function Home() {
             analysis: data.analysis
         };
         setFiles(updatedFiles);
+        
+        // Add this line to automatically select the file that was just analyzed
+        setSelectedFileIndex(fileIndex);
         
         // Update analysis states with the complete data
         // Fix the structure mismatch between frontend and backend
@@ -1819,9 +2027,6 @@ export default function Home() {
             setCapturingPdf(false);
         }
     };
-
-    const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
-    const [showComparison, setShowComparison] = useState(false);
 
     const renderComparison = () => {
         if (selectedFileIndex === null || files.length <= 1) return null;
@@ -2415,60 +2620,91 @@ export default function Home() {
 
     // Initialize for serverless operation
     useEffect(() => {
-        // Initialize app for serverless mode
+        // Initialize app for serverless mode - this should only run once
         if (typeof window !== 'undefined') {
-            console.log('Initializing app in serverless mode');
+            // Skip if already initialized
+            if (serverlessInitializedRef.current) return;
+            serverlessInitializedRef.current = true;
             
-            // Handle page visibility change to check for results when user returns to tab
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && jobId && progress < 100 && progress > 10) {
-                    console.log('Page became visible, checking for results...');
-                    checkForResults();
-                }
-            });
+            console.log('Initializing app in serverless mode - ONE TIME ONLY');
             
-            // Save job ID in sessionStorage for recovery if page refreshes
-            if (jobId) {
-                sessionStorage.setItem('currentJobId', jobId);
-            } else {
-                const savedJobId = sessionStorage.getItem('currentJobId');
-                if (savedJobId && !analysis.length) {
-                    console.log('Recovered job ID from session:', savedJobId);
-                    setJobId(savedJobId);
+            // Setup visibility handler for checking results when tab becomes visible
+            const visibilityHandler = () => {
+              // Only trigger a check if:
+              // 1. The page is becoming visible
+              // 2. We have an active job
+              // 3. Progress is high enough (>90%) to potentially have results
+              // 4. Analysis isn't already complete (progress < 100)
+              if (document.visibilityState === 'visible' && jobId && progress > 90 && progress < 100) {
+                console.log('Page became visible at high progress, checking for results...');
+                // Use setTimeout to debounce multiple rapid visibility changes
+                setTimeout(() => checkForResults(false), 1000);
+              }
+            };
+            
+            // Add event listener
+            document.addEventListener('visibilitychange', visibilityHandler);
+            
+            // Handle job ID recovery
+            const savedJobId = sessionStorage.getItem('currentJobId');
+            if (savedJobId && !analysis.length) {
+                console.log('Recovered job ID from session:', savedJobId);
+                
+                // First check if job is already completed
+                if (isJobCompleted(savedJobId)) {
+                    console.log(`Recovered job ${savedJobId} is already marked as completed`);
+                    message.success('Previous analysis was already completed');
                     
-                    // Try to get results for the saved job ID
+                    // Just fetch the results directly
                     fetch(`/api/analyze?finalResult=true&jobId=${savedJobId}`)
-                      .then(response => response.ok ? response.json() : null)
-                      .then(data => {
-                        if (data && data.analysis) {
-                          setAnalysis(data.analysis);
-                          setSummary(data.summary || "");
-                          setPrologue(data.prologue || "");
-                          setConstructiveCriticism(data.constructiveCriticism || "");
-                          message.success('Recovered your previous analysis!');
-                          setShowAnalysisOverlay(false);
-                        } else {
-                          // If we recovered the jobId but don't have results yet, start the progress check
-                          console.log("Recovered job ID but analysis still in progress, starting progress check");
-                          setTimeout(() => {
-                            // Ensure jobId is set in the state before starting progress check
-                            setJobId(savedJobId);
-                            setTimeout(() => {
-                              if (savedJobId) {
-                                startSimpleProgressCheck();
-                              }
-                            }, 500);
-                          }, 1000);
-                        }
-                      })
-                      .catch(() => {
-                        // Clear saved job ID if it's no longer valid
-                        sessionStorage.removeItem('currentJobId');
-                      });
+                        .then(response => response.ok ? response.json() : null)
+                        .then(data => {
+                            if (data && data.analysis) {
+                                setAnalysis(data.analysis);
+                                setSummary(data.summary || "");
+                                setPrologue(data.prologue || "");
+                                setConstructiveCriticism(data.constructiveCriticism || "");
+                                setShowAnalysisOverlay(false);
+                            }
+                        })
+                        .catch(() => {
+                            sessionStorage.removeItem('currentJobId');
+                        });
+                    
+                    return;
                 }
+                
+                // Try to get results for the saved job ID
+                fetch(`/api/analyze?finalResult=true&jobId=${savedJobId}`)
+                    .then(response => response.ok ? response.json() : null)
+                    .then(data => {
+                        if (data && data.analysis) {
+                            // We have results
+                            setAnalysis(data.analysis);
+                            setSummary(data.summary || "");
+                            setPrologue(data.prologue || "");
+                            setConstructiveCriticism(data.constructiveCriticism || "");
+                            message.success('Recovered your previous analysis!');
+                            setShowAnalysisOverlay(false);
+                        } else if (savedJobId) {
+                            // Still processing
+                            console.log("Job still in progress, continuing progress check");
+                            setJobId(savedJobId);
+                            startSimpleProgressCheck(savedJobId);
+                        }
+                    })
+                    .catch(() => {
+                        // Clear invalid job ID
+                        sessionStorage.removeItem('currentJobId');
+                    });
             }
+            
+            // Clean up the event listener when component unmounts
+            return () => {
+                document.removeEventListener('visibilitychange', visibilityHandler);
+            };
         }
-    }, [jobId, analysis.length, progress]);
+    }, []); // Empty dependency array means this runs once on mount
 
     // In the useEffect where you initialize the app
     useEffect(() => {
@@ -2559,6 +2795,81 @@ export default function Home() {
         clearInterval(visualTimer);
       };
     }, [showAnalysisOverlay]);
+
+    // Helper function to force UI refresh with analysis data
+    const forceRefreshUI = (data) => {
+      console.log("FORCE REFRESHING UI with analysis data", data);
+      
+      // First update the analysis data
+      if (data && data.analysis) {
+        setAnalysis(data.analysis);
+        setSummary(data.summary || "");
+        setPrologue(data.prologue || "");
+        setConstructiveCriticism(data.constructiveCriticism || "");
+        
+        // If we have a jobId, mark it as completed
+        if (jobId) {
+          markJobCompleted(jobId);
+          console.log(`Marked job ${jobId} as completed in forceRefreshUI`);
+        }
+      }
+      
+      // Update UI states
+      setLoading(false);
+      setProgress(100);
+      setAnalysisStage("Analysis complete!");
+      setShowAnalysisOverlay(false);
+      
+      // Force file selection if needed
+      if (selectedFileIndex === null) {
+        setSelectedFileIndex(0);
+      }
+      
+      // Show success message
+      message.success("Analysis completed successfully!", 5);
+    };
+
+    // Note: Using the comprehensive startSimpleProgressCheck implementation defined earlier in the file
+    // The duplicate definition has been removed
+
+    // Save job ID to session storage whenever it changes
+    useEffect(() => {
+        if (jobId) {
+            // Save current job ID to session storage for recovery if page refreshes
+            sessionStorage.setItem('currentJobId', jobId);
+            console.log(`Saved job ID to session storage: ${jobId}`);
+        }
+    }, [jobId]);
+
+    // Helper function to mark a job as completed
+    const markJobCompleted = (jobId: string) => {
+        try {
+            // Get existing completed jobs or initialize empty array
+            const completedJobsJson = sessionStorage.getItem('completedJobs') || '[]';
+            const completedJobs = JSON.parse(completedJobsJson);
+            
+            // Add current job if not already in the list
+            if (!completedJobs.includes(jobId)) {
+                completedJobs.push(jobId);
+                sessionStorage.setItem('completedJobs', JSON.stringify(completedJobs));
+                console.log(`Marked job ${jobId} as completed in session storage`);
+            }
+        } catch (err) {
+            console.error('Error storing completed job status:', err);
+        }
+    };
+    
+    // Helper function to check if a job is already completed
+    const isJobCompleted = (jobId: string): boolean => {
+        try {
+            const completedJobsJson = sessionStorage.getItem('completedJobs') || '[]';
+            const completedJobs = JSON.parse(completedJobsJson);
+            return completedJobs.includes(jobId);
+        } catch (err) {
+            console.error('Error checking completed job status:', err);
+            return false;
+        }
+    };
 
     return (
         <AntApp>
@@ -4086,13 +4397,33 @@ export default function Home() {
                                     {/* Show progress bar in serverless mode too */}
                                     <div className="progressBar" style={{ marginBottom: '15px' }}>
                                         <div 
-                                            className="progressFill" 
+                                            className={`progressFill ${progress >= 90 ? 'pulsing' : ''}`}
                                             style={{
                                                 width: `${progress}%`,
                                                 backgroundColor: progress === 100 ? '#52c41a' : '#1890ff',
-                                                transition: 'width 0.8s ease-in-out'
+                                                transition: 'width 0.8s ease-in-out',
+                                                height: '12px', // Make it taller
+                                                borderRadius: '6px',
+                                                boxShadow: '0 0 5px rgba(24, 144, 255, 0.5)', // Add glow effect
+                                                position: 'relative',
+                                                overflow: 'hidden'
                                             }}
-                                        ></div>
+                                        >
+                                            {/* Add animated stripe effect */}
+                                            <div 
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    right: 0,
+                                                    bottom: 0,
+                                                    background: 'linear-gradient(45deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent)',
+                                                    backgroundSize: '20px 20px',
+                                                    animation: 'move-stripes 1s linear infinite',
+                                                    zIndex: 1
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                     
                                     <div className="progress-status">
@@ -4180,6 +4511,23 @@ export default function Home() {
                                           ) : (
                                             'Finalizing results...'
                                           )}
+                                          
+                                          {/* Force check button */}
+                                          <Button 
+                                            type="primary"
+                                            size="small"
+                                            onClick={() => checkForResults(true)}
+                                            style={{ 
+                                              marginTop: "15px", 
+                                              background: "#1890ff",
+                                              fontWeight: "500"
+                                            }}
+                                          >
+                                            Force Check Now
+                                          </Button>
+                                          <div style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>
+                                            {visualCountdown < 60 ? "Use this if the timer reached zero" : "Skip waiting and check now"}
+                                          </div>
                                         </div>
                                       </div>
                                     </div>
